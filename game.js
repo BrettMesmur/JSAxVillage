@@ -1,10 +1,11 @@
-const RARITY_ORDER = ["common", "rare", "epic", "legendary"];
+const RARITY_ORDER = ["common", "rare", "epic", "legendary", "reallyawesome"];
 
 const RARITY_CONFIG = {
   common: { foodSlots: 5, toySlots: 2, basePerClick: 1, hue: 25, chance: 1, foodPerLevel: 0.3, toyAutoPerLevel: 0.25 },
   rare: { foodSlots: 7, toySlots: 3, basePerClick: 3, hue: 190, chance: 0, foodPerLevel: 0.45, toyAutoPerLevel: 0.45 },
   epic: { foodSlots: 9, toySlots: 4, basePerClick: 7, hue: 280, chance: 0, foodPerLevel: 0.6, toyAutoPerLevel: 0.7 },
   legendary: { foodSlots: 12, toySlots: 6, basePerClick: 15, hue: 50, chance: 0, foodPerLevel: 0.85, toyAutoPerLevel: 1.05 },
+  reallyawesome: { foodSlots: 16, toySlots: 8, basePerClick: 28, hue: 330, chance: 0, foodPerLevel: 1.15, toyAutoPerLevel: 1.45 },
 };
 
 const FOOD_PER_LEVEL = 0.35;
@@ -42,6 +43,13 @@ const AXOLOTL_IMAGES = {
     "Images/axolotls/Legendary/ChatGPT Image Feb 1, 2026, 01_28_51 PM.png",
     "Images/axolotls/Legendary/ChatGPT Image Feb 1, 2026, 01_47_02 PM.png",
   ],
+  reallyawesome: [
+    "Images/axolotls/ReallyAwesome/queen.png",
+    "Images/axolotls/ReallyAwesome/king.png",
+    "Images/axolotls/ReallyAwesome/ChatGPT Image Feb 1, 2026, 01_20_38 PM.png",
+    "Images/axolotls/ReallyAwesome/ChatGPT Image Feb 1, 2026, 01_44_48 PM.png",
+    "Images/axolotls/ReallyAwesome/ChatGPT Image Feb 1, 2026, 01_45_39 PM.png",
+  ],
 };
 
 const RARITY_BASE_COST = {
@@ -49,6 +57,7 @@ const RARITY_BASE_COST = {
   rare: 240,
   epic: 620,
   legendary: 1650,
+  reallyawesome: 4200,
 };
 
 const state = {
@@ -84,6 +93,11 @@ const ui = {
   emptySlotTemplate: document.getElementById("emptySlotTemplate"),
   lockedSlotTemplate: document.getElementById("lockedSlotTemplate"),
 };
+
+function rarityLabel(rarity) {
+  if (rarity === "reallyawesome") return "Really Awesome";
+  return rarity[0].toUpperCase() + rarity.slice(1);
+}
 
 function randomRaritySprite(rarity) {
   const options = AXOLOTL_IMAGES[rarity] || AXOLOTL_IMAGES.common;
@@ -416,7 +430,7 @@ function renderStore() {
       onBuy: buyToy,
     },
     ...RARITY_ORDER.map((rarity) => ({
-      name: `Purchase ${rarity[0].toUpperCase() + rarity.slice(1)} Axolotto`,
+      name: `Purchase ${rarityLabel(rarity)} Axolotto`,
       description: `Buy a ${rarity} axolotto with rarity-scaled stats and cost.` ,
       cost: () => (state.axolottos.length >= state.unlockedSlots ? null : `${axolottoCost(rarity)} bubbles`),
       onBuy: () => buyAxolotto(rarity),
