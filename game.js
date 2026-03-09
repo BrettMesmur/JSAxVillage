@@ -1,10 +1,10 @@
 const RARITY_ORDER = ["common", "rare", "epic", "legendary"];
 
 const RARITY_CONFIG = {
-  common: { foodSlots: 5, toySlots: 2, basePerClick: 1, hue: 25, chance: 1 },
-  rare: { foodSlots: 2, toySlots: 2, basePerClick: 2, hue: 190, chance: 0 },
-  epic: { foodSlots: 3, toySlots: 2, basePerClick: 4, hue: 280, chance: 0 },
-  legendary: { foodSlots: 4, toySlots: 3, basePerClick: 8, hue: 50, chance: 0 },
+  common: { foodSlots: 5, toySlots: 2, basePerClick: 1, hue: 25, chance: 1, foodPerLevel: 0.3, toyAutoPerLevel: 0.25 },
+  rare: { foodSlots: 7, toySlots: 3, basePerClick: 3, hue: 190, chance: 0, foodPerLevel: 0.45, toyAutoPerLevel: 0.45 },
+  epic: { foodSlots: 9, toySlots: 4, basePerClick: 7, hue: 280, chance: 0, foodPerLevel: 0.6, toyAutoPerLevel: 0.7 },
+  legendary: { foodSlots: 12, toySlots: 6, basePerClick: 15, hue: 50, chance: 0, foodPerLevel: 0.85, toyAutoPerLevel: 1.05 },
 };
 
 const FOOD_PER_LEVEL = 0.35;
@@ -14,6 +14,42 @@ const SLOTS_PER_HOUSE = 6;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 1.8;
 const SAVE_KEY = "jsax_village_save_v1";
+
+const AXOLOTL_IMAGES = {
+  common: [
+    "Images/axolotls/Common/normal.png",
+    "Images/axolotls/Common/minecraft.png",
+    "Images/axolotls/Common/ChatGPT Image Feb 1, 2026, 01_21_59 PM.png",
+  ],
+  rare: [
+    "Images/axolotls/Rare/cookie.png",
+    "Images/axolotls/Rare/gold.png",
+    "Images/axolotls/Rare/ChatGPT Image Feb 1, 2026, 01_26_02 PM.png",
+    "Images/axolotls/Rare/ChatGPT Image Mar 9, 2026, 01_58_32 PM.png",
+    "Images/axolotls/Rare/ChatGPT Image Mar 9, 2026, 01_59_19 PM.png",
+  ],
+  epic: [
+    "Images/axolotls/Epic/lavacute.png",
+    "Images/axolotls/Epic/thief.png",
+    "Images/axolotls/Epic/ChatGPT Image Feb 1, 2026, 01_18_38 PM.png",
+    "Images/axolotls/Epic/ChatGPT Image Feb 1, 2026, 01_32_48 PM.png",
+    "Images/axolotls/Epic/ChatGPT Image Feb 1, 2026, 01_44_14 PM.png",
+  ],
+  legendary: [
+    "Images/axolotls/Legendary/diamond.png",
+    "Images/axolotls/Legendary/lava.png",
+    "Images/axolotls/Legendary/time.png",
+    "Images/axolotls/Legendary/ChatGPT Image Feb 1, 2026, 01_28_51 PM.png",
+    "Images/axolotls/Legendary/ChatGPT Image Feb 1, 2026, 01_47_02 PM.png",
+  ],
+};
+
+const RARITY_BASE_COST = {
+  common: 90,
+  rare: 240,
+  epic: 620,
+  legendary: 1650,
+};
 
 const state = {
   bubbles: 0,
@@ -49,6 +85,11 @@ const ui = {
   lockedSlotTemplate: document.getElementById("lockedSlotTemplate"),
 };
 
+function randomRaritySprite(rarity) {
+  const options = AXOLOTL_IMAGES[rarity] || AXOLOTL_IMAGES.common;
+  return options[Math.floor(Math.random() * options.length)];
+}
+
 function createAxolotto(rarity = "common") {
   const config = RARITY_CONFIG[rarity];
   return {
@@ -56,6 +97,7 @@ function createAxolotto(rarity = "common") {
     rarity,
     food: 0,
     toys: 0,
+    spritePath: randomRaritySprite(rarity),
     ...config,
   };
 }
@@ -67,13 +109,13 @@ function rehydrateAxolotto(data) {
     rarity,
     food: Math.max(0, Number(data.food || 0)),
     toys: Math.max(0, Number(data.toys || 0)),
+    spritePath: data.spritePath || randomRaritySprite(rarity),
     ...RARITY_CONFIG[rarity],
   };
 }
 
 function getSpritePath(axolotto) {
-  const folder = axolotto.rarity[0].toUpperCase() + axolotto.rarity.slice(1);
-  return `Images/axolotls/${folder}/normal.png`;
+  return encodeURI(axolotto.spritePath || randomRaritySprite(axolotto.rarity));
 }
 
 function weightedRarityRoll() {
@@ -86,13 +128,13 @@ function weightedRarityRoll() {
 }
 
 function bubblesPerClick(axolotto) {
-  const foodBoost = 1 + Math.min(axolotto.food, axolotto.foodSlots) * FOOD_PER_LEVEL;
+  const foodBoost = 1 + Math.min(axolotto.food, axolotto.foodSlots) * axolotto.foodPerLevel;
   const houseBoost = 1 + (state.houses - 1) * 0.08;
   return axolotto.basePerClick * foodBoost * houseBoost;
 }
 
 function autoClicksPerSecond(axolotto) {
-  return Math.min(axolotto.toys, axolotto.toySlots) * TOY_AUTO_PER_LEVEL;
+  return Math.min(axolotto.toys, axolotto.toySlots) * axolotto.toyAutoPerLevel;
 }
 
 function axolottoBps(axolotto) {
@@ -142,8 +184,13 @@ function toyCost() {
   return 14 + totalToyUpgrades() * 3;
 }
 
-function axolottoCost() {
-  return (18 + state.axolottos.length * 6) * 5;
+function rarityOwnedCount(rarity) {
+  return state.axolottos.filter((ax) => ax.rarity === rarity).length;
+}
+
+function axolottoCost(rarity) {
+  const base = RARITY_BASE_COST[rarity] || RARITY_BASE_COST.common;
+  return Math.floor(base * (1 + rarityOwnedCount(rarity) * 0.55));
 }
 
 function unlockSlotCost() {
@@ -264,11 +311,11 @@ function buyToy() {
   target.toys += 1;
 }
 
-function buyAxolotto() {
-  const cost = axolottoCost();
+function buyAxolotto(rarity) {
+  const cost = axolottoCost(rarity);
   if (state.axolottos.length >= state.unlockedSlots || state.bubbles < cost) return;
   state.bubbles -= cost;
-  state.axolottos.push(createAxolotto(weightedRarityRoll()));
+  state.axolottos.push(createAxolotto(rarity));
 }
 
 function buyWood() {
@@ -324,7 +371,7 @@ function saveGame() {
     unlockedSlots: state.unlockedSlots,
     zoom: state.zoom,
     villages: state.villages,
-    axolottos: state.axolottos.map((ax) => ({ id: ax.id, rarity: ax.rarity, food: ax.food, toys: ax.toys })),
+    axolottos: state.axolottos.map((ax) => ({ id: ax.id, rarity: ax.rarity, food: ax.food, toys: ax.toys, spritePath: ax.spritePath })),
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
 }
@@ -368,12 +415,12 @@ function renderStore() {
       cost: () => (state.axolottos.some((ax) => ax.toys < ax.toySlots) ? `${toyCost()} bubbles` : null),
       onBuy: buyToy,
     },
-    {
-      name: "Additional Axolotto",
-      description: "Costs much more now and fills the next unlocked slot.",
-      cost: () => (state.axolottos.length >= state.unlockedSlots ? null : `${axolottoCost()} bubbles`),
-      onBuy: buyAxolotto,
-    },
+    ...RARITY_ORDER.map((rarity) => ({
+      name: `Purchase ${rarity[0].toUpperCase() + rarity.slice(1)} Axolotto`,
+      description: `Buy a ${rarity} axolotto with rarity-scaled stats and cost.` ,
+      cost: () => (state.axolottos.length >= state.unlockedSlots ? null : `${axolottoCost(rarity)} bubbles`),
+      onBuy: () => buyAxolotto(rarity),
+    })),
     {
       name: "1 Wood",
       description: "Buy one wood resource directly.",
