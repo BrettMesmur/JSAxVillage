@@ -1,16 +1,18 @@
 const RARITY_ORDER = ["common", "rare", "epic", "legendary"];
 
 const RARITY_CONFIG = {
-  common: { foodSlots: 5, toySlots: 2, basePerClick: 1, hue: 25, chance: 1, houseBonus: 0.05 },
-  rare: { foodSlots: 2, toySlots: 2, basePerClick: 2, hue: 190, chance: 0, houseBonus: 0.08 },
-  epic: { foodSlots: 3, toySlots: 2, basePerClick: 4, hue: 280, chance: 0, houseBonus: 0.12 },
-  legendary: { foodSlots: 4, toySlots: 3, basePerClick: 8, hue: 50, chance: 0, houseBonus: 0.18 },
+  common: { foodSlots: 5, toySlots: 2, basePerClick: 1, hue: 25, chance: 1 },
+  rare: { foodSlots: 2, toySlots: 2, basePerClick: 2, hue: 190, chance: 0 },
+  epic: { foodSlots: 3, toySlots: 2, basePerClick: 4, hue: 280, chance: 0 },
+  legendary: { foodSlots: 4, toySlots: 3, basePerClick: 8, hue: 50, chance: 0 },
 };
 
 const FOOD_PER_LEVEL = 0.35;
 const TOY_AUTO_PER_LEVEL = 0.35;
 const STARTING_HOUSES = 1;
 const SLOTS_PER_HOUSE = 6;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 1.8;
 
 const state = {
   bubbles: 0,
@@ -19,6 +21,7 @@ const state = {
   axolottos: [],
   houses: STARTING_HOUSES,
   unlockedSlots: STARTING_HOUSES * SLOTS_PER_HOUSE,
+  villages: Array.from({ length: STARTING_HOUSES }, () => ({ clickUnlocked: false, decorations: 0, mayor: 0 })),
   zoom: 1,
 };
 
@@ -29,6 +32,7 @@ const ui = {
   housesWrap: document.getElementById("housesResource"),
   housesValue: document.getElementById("housesValue"),
   bpsValue: document.getElementById("bpsValue"),
+  wpsValue: document.getElementById("wpsValue"),
   zoomInBtn: document.getElementById("zoomInBtn"),
   zoomOutBtn: document.getElementById("zoomOutBtn"),
   zoomValue: document.getElementById("zoomValue"),
@@ -48,7 +52,6 @@ function createAxolotto(rarity = "common") {
     rarity,
     food: 0,
     toys: 0,
-    autoProgress: 0,
     ...config,
   };
 }
@@ -85,20 +88,69 @@ function totalBubblesPerSecond() {
   return state.axolottos.reduce((sum, ax) => sum + axolottoBps(ax), 0);
 }
 
+function villageUnlockCost(villageIndex) {
+  return 4 + villageIndex * 7;
+}
+
+function decorationCost(villageIndex) {
+  const village = state.villages[villageIndex];
+  return 6 + villageIndex * 4 + village.decorations * 6;
+}
+
+function mayorCost(villageIndex) {
+  const village = state.villages[villageIndex];
+  return 16 + villageIndex * 8 + village.mayor * 14;
+}
+
+function woodPerVillageClick(villageIndex) {
+  const village = state.villages[villageIndex];
+  return village.clickUnlocked ? 1 + village.decorations : 0;
+}
+
+function villageWoodPerSecond(villageIndex) {
+  const village = state.villages[villageIndex];
+  if (!village.clickUnlocked) return 0;
+  return village.mayor * woodPerVillageClick(villageIndex) * 0.5;
+}
+
+function totalWoodPerSecond() {
+  return state.villages.reduce((sum, _v, index) => sum + villageWoodPerSecond(index), 0);
+}
+
+function totalFoodUpgrades() {
+  return state.axolottos.reduce((sum, ax) => sum + ax.food, 0);
+}
+
+function totalToyUpgrades() {
+  return state.axolottos.reduce((sum, ax) => sum + ax.toys, 0);
+}
+
+function foodCost() {
+  return 10 + totalFoodUpgrades() * 2;
+}
+
+function toyCost() {
+  return 14 + totalToyUpgrades() * 3;
+}
+
+function axolottoCost() {
+  return 18 + state.axolottos.length * 6;
+}
+
 function unlockSlotCost() {
   const purchasedSlots = state.unlockedSlots - STARTING_HOUSES * SLOTS_PER_HOUSE;
-  return 30 + purchasedSlots * 20;
+  return 12 + purchasedSlots * 10;
 }
 
 function nextHouseCost() {
-  return 120 + (state.houses - 1) * 90;
+  return 30 + (state.houses - 1) * 22;
 }
 
 function applyZoom() {
-  const zoom = Math.max(0.6, Math.min(1.8, state.zoom));
-  const cardMin = Math.round(245 * zoom);
+  state.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, state.zoom));
+  const cardMin = Math.max(90, Math.round(245 * state.zoom));
   ui.villageGrid.style.setProperty("--village-card-min", `${cardMin}px`);
-  ui.zoomValue.textContent = `${Math.round(zoom * 100)}%`;
+  ui.zoomValue.textContent = `${Math.round(state.zoom * 100)}%`;
 }
 
 function renderResources() {
@@ -106,6 +158,7 @@ function renderResources() {
   ui.woodValue.textContent = state.wood.toFixed(1);
   ui.housesValue.textContent = `${state.houses}`;
   ui.bpsValue.textContent = totalBubblesPerSecond().toFixed(1);
+  ui.wpsValue.textContent = totalWoodPerSecond().toFixed(1);
 
   ui.woodWrap.hidden = state.wood <= 0;
   ui.housesWrap.hidden = state.houses <= 1;
@@ -150,10 +203,10 @@ function drawFallbackAxolotto(ctx, axolotto) {
   ctx.restore();
 }
 
-function spawnBubbleGain(node, amount) {
+function spawnBubbleGain(node, amount, label = "bubbles") {
   const gain = document.createElement("span");
   gain.className = "bubble-gain";
-  gain.textContent = `+${amount.toFixed(1)} bubbles`;
+  gain.textContent = `+${amount.toFixed(1)} ${label}`;
   node.appendChild(gain);
   setTimeout(() => gain.remove(), 1000);
 }
@@ -192,22 +245,25 @@ function renderAxolottoCard(axolotto) {
 
 function buyFood() {
   const target = state.axolottos.find((ax) => ax.food < ax.foodSlots);
-  if (!target || state.bubbles < 12) return;
-  state.bubbles -= 12;
+  const cost = foodCost();
+  if (!target || state.bubbles < cost) return;
+  state.bubbles -= cost;
   target.food += 1;
 }
 
 function buyToy() {
   const target = state.axolottos.find((ax) => ax.toys < ax.toySlots);
-  if (!target || state.bubbles < 12) return;
-  state.bubbles -= 12;
+  const cost = toyCost();
+  if (!target || state.bubbles < cost) return;
+  state.bubbles -= cost;
   target.toys += 1;
 }
 
 function buyAxolotto() {
-  if (state.axolottos.length >= state.unlockedSlots || state.bubbles < 12) return;
+  const cost = axolottoCost();
+  if (state.axolottos.length >= state.unlockedSlots || state.bubbles < cost) return;
   const rarity = weightedRarityRoll();
-  state.bubbles -= 12;
+  state.bubbles -= cost;
   state.axolottos.push(createAxolotto(rarity));
 }
 
@@ -215,6 +271,37 @@ function buyWood() {
   if (state.bubbles < 20) return;
   state.bubbles -= 20;
   state.wood += 1;
+}
+
+function unlockVillageClick(villageIndex) {
+  const cost = villageUnlockCost(villageIndex);
+  if (state.wood < cost) return;
+  state.wood -= cost;
+  state.villages[villageIndex].clickUnlocked = true;
+}
+
+function upgradeDecorations(villageIndex) {
+  const cost = decorationCost(villageIndex);
+  if (state.wood < cost || !state.villages[villageIndex].clickUnlocked) return;
+  state.wood -= cost;
+  state.villages[villageIndex].decorations += 1;
+}
+
+function hireMayor(villageIndex) {
+  const cost = mayorCost(villageIndex);
+  if (state.wood < cost || !state.villages[villageIndex].clickUnlocked) return;
+  state.wood -= cost;
+  state.villages[villageIndex].mayor += 1;
+}
+
+function collectVillageWood(villageIndex, node) {
+  const gain = woodPerVillageClick(villageIndex);
+  if (gain <= 0) return;
+  state.wood += gain;
+  spawnBubbleGain(node, gain, "wood");
+  renderResources();
+  renderStore();
+  renderVillage();
 }
 
 function unlockSlot() {
@@ -230,37 +317,38 @@ function buyHouse() {
   if (state.wood < cost) return;
   state.wood -= cost;
   state.houses += 1;
+  state.villages.push({ clickUnlocked: false, decorations: 0, mayor: 0 });
 }
 
 function renderStore() {
   const items = [
     {
       name: "Food",
-      description: "Adds +35% click value to the first Axolotto with open food slots.",
-      cost: () => (state.axolottos.some((ax) => ax.food < ax.foodSlots) ? "12 bubbles" : null),
+      description: "Raise click value; each purchase costs more than the last.",
+      cost: () => (state.axolottos.some((ax) => ax.food < ax.foodSlots) ? `${foodCost()} bubbles` : null),
       onBuy: buyFood,
     },
     {
       name: "Toy",
-      description: "Adds auto-click speed to the first Axolotto with open toy slots.",
-      cost: () => (state.axolottos.some((ax) => ax.toys < ax.toySlots) ? "12 bubbles" : null),
+      description: "Raise auto-click speed; each purchase costs more than the last.",
+      cost: () => (state.axolottos.some((ax) => ax.toys < ax.toySlots) ? `${toyCost()} bubbles` : null),
       onBuy: buyToy,
     },
     {
       name: "Additional Axolotto",
-      description: "Adds a new axolotto into any unlocked empty village slot.",
-      cost: () => (state.axolottos.length >= state.unlockedSlots ? null : "12 bubbles"),
+      description: "Costs more each time and fills the next unlocked slot.",
+      cost: () => (state.axolottos.length >= state.unlockedSlots ? null : `${axolottoCost()} bubbles`),
       onBuy: buyAxolotto,
     },
     {
       name: "1 Wood",
-      description: "Buy one piece of wood for slot unlocks and village expansion.",
+      description: "Buy one wood resource directly.",
       cost: () => "20 bubbles",
       onBuy: buyWood,
     },
     {
       name: "New House",
-      description: "Adds 6 new empty village slots that can be unlocked with wood.",
+      description: "Adds a new village with 6 more slots and its own upgrades.",
       cost: () => `${nextHouseCost()} wood`,
       disabled: () => state.wood < nextHouseCost(),
       onBuy: buyHouse,
@@ -301,13 +389,56 @@ function renderVillage() {
   ui.villageGrid.innerHTML = "";
 
   for (let houseIndex = 0; houseIndex < state.houses; houseIndex += 1) {
-    const village = document.createElement("section");
-    village.className = "village-block";
+    const village = state.villages[houseIndex];
+    const villageNode = document.createElement("section");
+    villageNode.className = "village-block";
 
     const heading = document.createElement("h3");
     heading.className = "village-block-title";
-    heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s`;
-    village.appendChild(heading);
+    heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+    villageNode.appendChild(heading);
+
+    const villageControls = document.createElement("div");
+    villageControls.className = "village-controls";
+
+    const icon = document.createElement("img");
+    icon.className = "village-icon";
+    icon.src = "Images/axolotls/Common/normal.png";
+    icon.alt = "Village icon";
+    villageControls.appendChild(icon);
+
+    const collectBtn = document.createElement("button");
+    collectBtn.textContent = village.clickUnlocked
+      ? `Collect Wood (+${woodPerVillageClick(houseIndex).toFixed(1)})`
+      : `Unlock Collect (${villageUnlockCost(houseIndex)} wood)`;
+    collectBtn.disabled = village.clickUnlocked ? false : state.wood < villageUnlockCost(houseIndex);
+    collectBtn.addEventListener("click", () => {
+      if (village.clickUnlocked) {
+        collectVillageWood(houseIndex, villageControls);
+      } else {
+        unlockVillageClick(houseIndex);
+        renderAll();
+      }
+    });
+
+    const decorationsBtn = document.createElement("button");
+    decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${decorationCost(houseIndex)} wood)`;
+    decorationsBtn.disabled = !village.clickUnlocked || state.wood < decorationCost(houseIndex);
+    decorationsBtn.addEventListener("click", () => {
+      upgradeDecorations(houseIndex);
+      renderAll();
+    });
+
+    const mayorBtn = document.createElement("button");
+    mayorBtn.textContent = `Mayor Lv ${village.mayor} (${mayorCost(houseIndex)} wood)`;
+    mayorBtn.disabled = !village.clickUnlocked || state.wood < mayorCost(houseIndex);
+    mayorBtn.addEventListener("click", () => {
+      hireMayor(houseIndex);
+      renderAll();
+    });
+
+    villageControls.append(collectBtn, decorationsBtn, mayorBtn);
+    villageNode.appendChild(villageControls);
 
     const slotsGrid = document.createElement("div");
     slotsGrid.className = "village-slots";
@@ -336,15 +467,18 @@ function renderVillage() {
       }
     }
 
-    village.appendChild(slotsGrid);
-    ui.villageGrid.appendChild(village);
+    villageNode.appendChild(slotsGrid);
+    ui.villageGrid.appendChild(villageNode);
   }
 }
 
 function tick(deltaSeconds) {
   state.axolottos.forEach((ax) => {
-    const gained = axolottoBps(ax) * deltaSeconds;
-    state.bubbles += gained;
+    state.bubbles += axolottoBps(ax) * deltaSeconds;
+  });
+
+  state.villages.forEach((_v, index) => {
+    state.wood += villageWoodPerSecond(index) * deltaSeconds;
   });
 }
 
@@ -358,12 +492,12 @@ function start() {
   state.axolottos.push(createAxolotto("common"));
 
   ui.zoomOutBtn.addEventListener("click", () => {
-    state.zoom = Math.max(0.6, state.zoom - 0.1);
+    state.zoom = Math.max(MIN_ZOOM, state.zoom - 0.1);
     applyZoom();
   });
 
   ui.zoomInBtn.addEventListener("click", () => {
-    state.zoom = Math.min(1.8, state.zoom + 0.1);
+    state.zoom = Math.min(MAX_ZOOM, state.zoom + 0.1);
     applyZoom();
   });
 
@@ -376,6 +510,7 @@ function start() {
     previous = now;
     tick(delta);
     renderResources();
+    renderVillage();
 
     sinceStoreRefresh += delta;
     if (sinceStoreRefresh >= 0.5) {
