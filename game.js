@@ -88,7 +88,7 @@ const ui = {
   storeList: document.getElementById("storeList"),
   saveBtn: document.getElementById("saveBtn"),
   loadBtn: document.getElementById("loadBtn"),
-  clearSaveBtn: document.getElementById("clearSaveBtn"),
+  newGameBtn: document.getElementById("newGameBtn"),
   axolottoCardTemplate: document.getElementById("axolottoCardTemplate"),
   storeItemTemplate: document.getElementById("storeItemTemplate"),
   emptySlotTemplate: document.getElementById("emptySlotTemplate"),
@@ -278,21 +278,40 @@ function spawnBubbleGain(node, amount, label = "bubbles") {
   setTimeout(() => gain.remove(), 1000);
 }
 
+function drawImageContain(ctx, image) {
+  const canvasRatio = ctx.canvas.width / ctx.canvas.height;
+  const imageRatio = image.width / image.height;
+
+  let drawWidth = ctx.canvas.width;
+  let drawHeight = ctx.canvas.height;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (imageRatio > canvasRatio) {
+    drawHeight = drawWidth / imageRatio;
+    offsetY = (ctx.canvas.height - drawHeight) / 2;
+  } else {
+    drawWidth = drawHeight * imageRatio;
+    offsetX = (ctx.canvas.width - drawWidth) / 2;
+  }
+
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+}
+
 function renderAxolottoCard(axolotto) {
   const node = ui.axolottoCardTemplate.content.firstElementChild.cloneNode(true);
   const canvas = node.querySelector(".ax-canvas");
-  const name = node.querySelector(".ax-name");
   const rarity = node.querySelector(".ax-rarity");
   const stats = node.querySelector(".ax-stats");
 
-  name.textContent = `Axolotto #${state.axolottos.indexOf(axolotto) + 1}`;
   rarity.textContent = `Rarity: ${axolotto.rarity}`;
   stats.textContent = `Food ${axolotto.food}/${axolotto.foodSlots}, Toys ${axolotto.toys}/${axolotto.toySlots}, Click +${bubblesPerClick(axolotto).toFixed(1)} bubbles`;
 
   const ctx = canvas.getContext("2d");
   if (state.spriteMode) {
     const image = new Image();
-    image.onload = () => ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    image.onload = () => drawImageContain(ctx, image);
     image.onerror = () => drawFallbackAxolotto(ctx, axolotto);
     image.src = getSpritePath(axolotto);
   } else {
@@ -426,6 +445,16 @@ function loadGame() {
 
   const loadedAx = Array.isArray(data.axolottos) ? data.axolottos.map(rehydrateAxolotto) : [];
   state.axolottos = loadedAx.slice(0, state.unlockedSlots);
+}
+
+function resetGameState() {
+  state.bubbles = 0;
+  state.wood = 0;
+  state.axolottos = [createAxolotto("common")];
+  state.houses = STARTING_HOUSES;
+  state.unlockedSlots = STARTING_HOUSES * SLOTS_PER_HOUSE;
+  state.villages = Array.from({ length: STARTING_HOUSES }, () => ({ decorations: 0, mayor: 0, nextCollectAt: 0 }));
+  state.zoom = 1;
 }
 
 function clearSave() {
@@ -613,7 +642,13 @@ function renderAll() {
 }
 
 function start() {
-  state.axolottos.push(createAxolotto("common"));
+  if (localStorage.getItem(SAVE_KEY)) {
+    loadGame();
+  }
+
+  if (!state.axolottos.length) {
+    state.axolottos.push(createAxolotto("common"));
+  }
 
   ui.zoomOutBtn.addEventListener("click", () => {
     state.zoom = Math.max(MIN_ZOOM, state.zoom - 0.1);
@@ -629,9 +664,12 @@ function start() {
     loadGame();
     renderAll();
   });
-  ui.clearSaveBtn.addEventListener("click", () => {
-    if (!window.confirm("Clear saved progress? This cannot be undone.")) return;
+  ui.newGameBtn.addEventListener("click", () => {
+    if (!window.confirm("Start a new game? Your saved progress will be overwritten.")) return;
     clearSave();
+    resetGameState();
+    saveGame();
+    renderAll();
   });
 
   let previous = performance.now();

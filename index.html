@@ -41,9 +41,10 @@
 
     <template id="axolottoCardTemplate">
       <article class="ax-card clickable">
-        <canvas width="240" height="170" class="ax-canvas" aria-label="Axolotto"></canvas>
+        <div class="ax-art" aria-hidden="true">
+          <canvas width="240" height="170" class="ax-canvas" aria-label="Axolotto"></canvas>
+        </div>
         <div class="ax-meta">
-          <h3 class="ax-name"></h3>
           <p class="ax-rarity"></p>
           <p class="ax-stats"></p>
         </div>
@@ -80,7 +81,7 @@
     <footer class="save-controls">
       <button id="saveBtn" type="button">Save Progress</button>
       <button id="loadBtn" type="button">Load Progress</button>
-      <button id="clearSaveBtn" type="button">Clear Save</button>
+      <button id="newGameBtn" type="button">New Game</button>
     </footer>
 
     <script src="game.js"></script>
