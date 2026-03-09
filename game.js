@@ -301,7 +301,7 @@ function collectVillageWood(villageIndex, node) {
   spawnBubbleGain(node, gain, "wood");
   renderResources();
   renderStore();
-  renderVillage();
+  refreshVillagePanels();
 }
 
 function unlockSlot() {
@@ -392,6 +392,7 @@ function renderVillage() {
     const village = state.villages[houseIndex];
     const villageNode = document.createElement("section");
     villageNode.className = "village-block";
+    villageNode.dataset.villageIndex = String(houseIndex);
 
     const heading = document.createElement("h3");
     heading.className = "village-block-title";
@@ -408,6 +409,7 @@ function renderVillage() {
     villageControls.appendChild(icon);
 
     const collectBtn = document.createElement("button");
+    collectBtn.className = "collect-wood-btn";
     collectBtn.textContent = village.clickUnlocked
       ? `Collect Wood (+${woodPerVillageClick(houseIndex).toFixed(1)})`
       : `Unlock Collect (${villageUnlockCost(houseIndex)} wood)`;
@@ -422,6 +424,7 @@ function renderVillage() {
     });
 
     const decorationsBtn = document.createElement("button");
+    decorationsBtn.className = "decorations-btn";
     decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${decorationCost(houseIndex)} wood)`;
     decorationsBtn.disabled = !village.clickUnlocked || state.wood < decorationCost(houseIndex);
     decorationsBtn.addEventListener("click", () => {
@@ -430,6 +433,7 @@ function renderVillage() {
     });
 
     const mayorBtn = document.createElement("button");
+    mayorBtn.className = "mayor-btn";
     mayorBtn.textContent = `Mayor Lv ${village.mayor} (${mayorCost(houseIndex)} wood)`;
     mayorBtn.disabled = !village.clickUnlocked || state.wood < mayorCost(houseIndex);
     mayorBtn.addEventListener("click", () => {
@@ -472,6 +476,45 @@ function renderVillage() {
   }
 }
 
+
+function refreshVillagePanels() {
+  state.villages.forEach((village, houseIndex) => {
+    const villageNode = ui.villageGrid.querySelector(`[data-village-index="${houseIndex}"]`);
+    if (!villageNode) return;
+
+    const heading = villageNode.querySelector('.village-block-title');
+    if (heading) {
+      heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+    }
+
+    const collectBtn = villageNode.querySelector('.collect-wood-btn');
+    if (collectBtn) {
+      collectBtn.textContent = village.clickUnlocked
+        ? `Collect Wood (+${woodPerVillageClick(houseIndex).toFixed(1)})`
+        : `Unlock Collect (${villageUnlockCost(houseIndex)} wood)`;
+      collectBtn.disabled = village.clickUnlocked ? false : state.wood < villageUnlockCost(houseIndex);
+    }
+
+    const decorationsBtn = villageNode.querySelector('.decorations-btn');
+    if (decorationsBtn) {
+      decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${decorationCost(houseIndex)} wood)`;
+      decorationsBtn.disabled = !village.clickUnlocked || state.wood < decorationCost(houseIndex);
+    }
+
+    const mayorBtn = villageNode.querySelector('.mayor-btn');
+    if (mayorBtn) {
+      mayorBtn.textContent = `Mayor Lv ${village.mayor} (${mayorCost(houseIndex)} wood)`;
+      mayorBtn.disabled = !village.clickUnlocked || state.wood < mayorCost(houseIndex);
+    }
+  });
+
+  ui.villageGrid.querySelectorAll('.unlock-slot-btn').forEach((btn) => {
+    const cost = unlockSlotCost();
+    btn.textContent = `Unlock for ${cost} wood`;
+    btn.disabled = state.wood < cost;
+  });
+}
+
 function tick(deltaSeconds) {
   state.axolottos.forEach((ax) => {
     state.bubbles += axolottoBps(ax) * deltaSeconds;
@@ -510,7 +553,7 @@ function start() {
     previous = now;
     tick(delta);
     renderResources();
-    renderVillage();
+    refreshVillagePanels();
 
     sinceStoreRefresh += delta;
     if (sinceStoreRefresh >= 0.5) {
