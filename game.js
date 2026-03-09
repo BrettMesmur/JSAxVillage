@@ -513,12 +513,6 @@ function renderVillage() {
     const villageControls = document.createElement("div");
     villageControls.className = "village-controls";
 
-    const icon = document.createElement("img");
-    icon.className = "village-icon";
-    icon.src = "Images/houses/Common/1.png";
-    icon.alt = "Village house";
-    villageControls.appendChild(icon);
-
     const collectBtn = document.createElement("button");
     collectBtn.className = "collect-wood-btn";
     collectBtn.textContent = collectButtonLabel(houseIndex);
@@ -642,6 +636,10 @@ function start() {
 
   let previous = performance.now();
   let sinceStoreRefresh = 0;
+
+  setInterval(() => {
+    saveGame();
+  }, 10000);
 
   setInterval(() => {
     const now = performance.now();
