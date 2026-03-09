@@ -6,8 +6,6 @@
   --text: #eaf1ff;
   --muted: #a6b7d8;
   --accent: #5ed6ff;
-  --success: #7deb9f;
-  --warning: #f5ca6f;
 }
 
 * {
@@ -23,6 +21,9 @@ body {
 }
 
 .top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   gap: 1rem;
   align-items: center;
@@ -30,8 +31,14 @@ body {
   flex-wrap: wrap;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid #2a3a5c;
-  background: #11182a99;
-  backdrop-filter: blur(6px);
+  background: #11182ae8;
+  backdrop-filter: blur(8px);
+}
+
+.top-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .top-bar h1 {
@@ -39,21 +46,51 @@ body {
   font-size: 1.4rem;
 }
 
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--panel);
+  border: 1px solid #2d3d61;
+  border-radius: 8px;
+  padding: 0.25rem 0.4rem;
+}
+
+.zoom-controls button {
+  padding: 0.2rem 0.55rem;
+  min-width: 32px;
+}
+
+#zoomValue {
+  color: var(--muted);
+  font-size: 0.9rem;
+  min-width: 48px;
+  text-align: center;
+}
+
 .resource-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(5, minmax(170px, 1fr));
   gap: 0.5rem;
-  min-width: min(100%, 550px);
+  min-width: min(100%, 950px);
 }
 
 .resource-card {
   background: var(--panel);
   border: 1px solid #2d3d61;
   border-radius: 10px;
-  padding: 0.45rem 0.6rem;
+  padding: 0.75rem 0.95rem;
+  min-width: 170px;
   display: flex;
   justify-content: space-between;
-  font-size: 0.92rem;
+  align-items: center;
+  font-size: 0.98rem;
+}
+
+.resource-card strong {
+  min-width: 7.5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .layout {
@@ -70,33 +107,57 @@ body {
   padding: 1rem;
 }
 
-.panel-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.panel-note {
-  margin-top: 0.4rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.toggle-label {
-  color: var(--muted);
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
 .village-grid {
   margin-top: 1rem;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+  gap: 1rem;
+  --village-card-min: 245px;
+}
+
+.village-block {
+  border: 1px solid #335179;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background-image: linear-gradient(#122133cc, #122133cc), url("Images/houses/Common/1.png");
+  background-size: cover;
+  background-position: center;
+}
+
+.village-block-title {
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+.village-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+  align-items: center;
+}
+
+.village-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--village-card-min), 1fr));
   gap: 0.85rem;
+}
+
+.village-helper {
+  margin: 0.1rem 0 0.7rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.save-controls {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  padding: 0.75rem 1rem 1.2rem;
+}
+
+.save-controls button {
+  min-width: 140px;
 }
 
 .ax-card {
@@ -104,6 +165,11 @@ body {
   border-radius: 10px;
   border: 1px solid #374b73;
   overflow: hidden;
+  position: relative;
+}
+
+.ax-card.clickable {
+  cursor: pointer;
 }
 
 .ax-canvas {
@@ -126,6 +192,43 @@ body {
 .item-description {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.empty-slot,
+.locked-slot {
+  min-height: 230px;
+  display: flex;
+  align-items: center;
+}
+
+.bubble-gain {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, -50%);
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #d2def8;
+  border-radius: 999px;
+  box-shadow: 0 10px 28px #00000040;
+  font-weight: 800;
+  padding: 0.25rem 0.65rem;
+  animation: riseFade 1s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes riseFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+  15% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -90px);
+  }
 }
 
 button {
@@ -159,12 +262,17 @@ button:disabled {
   margin: 0 0 0.25rem;
 }
 
-.buy-btn {
+.buy-btn,
+.unlock-slot-btn {
   width: 100%;
 }
 
 @media (max-width: 920px) {
   .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .village-controls {
     grid-template-columns: 1fr;
   }
 }
