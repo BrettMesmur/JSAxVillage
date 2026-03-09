@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JSAxVillage</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top-bar">
+      <h1>Axolotto Village</h1>
+      <div class="resource-strip">
+        <div class="resource-card"><span>Bubbles</span><strong id="bubblesValue">0</strong></div>
+        <div class="resource-card"><span>Wood</span><strong id="woodValue">0</strong></div>
+        <div class="resource-card"><span>Houses</span><strong id="housesValue">0</strong></div>
+        <div class="resource-card"><span>Bubble/s</span><strong id="bpsValue">0</strong></div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel village-panel">
+        <div class="panel-title-row">
+          <h2>Village Space (6 Axolotto slots)</h2>
+          <label class="toggle-label">
+            <input id="spriteToggle" type="checkbox" />
+            Prefer sprites when available
+          </label>
+        </div>
+        <p class="panel-note">Fallback rendering uses simple shapes and works without art assets.</p>
+        <div id="villageGrid" class="village-grid"></div>
+      </section>
+
+      <aside class="panel store-panel">
+        <h2>Store</h2>
+        <div id="storeList" class="store-list"></div>
+      </aside>
+    </main>
+
+    <template id="axolottoCardTemplate">
+      <article class="ax-card">
+        <canvas width="240" height="170" class="ax-canvas" aria-label="Axolotto"></canvas>
+        <div class="ax-meta">
+          <h3 class="ax-name"></h3>
+          <p class="ax-rarity"></p>
+          <p class="ax-stats"></p>
+          <button class="click-btn">Click for bubbles</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="storeItemTemplate">
+      <article class="store-item">
+        <h3 class="item-name"></h3>
+        <p class="item-description"></p>
+        <button class="buy-btn">Buy</button>
+      </article>
+    </template>
+
+    <script src="game.js"></script>
+  </body>
+</html>
