@@ -19,6 +19,7 @@ const state = {
   axolottos: [],
   houses: STARTING_HOUSES,
   unlockedSlots: STARTING_HOUSES * SLOTS_PER_HOUSE,
+  zoom: 1,
 };
 
 const ui = {
@@ -28,6 +29,9 @@ const ui = {
   housesWrap: document.getElementById("housesResource"),
   housesValue: document.getElementById("housesValue"),
   bpsValue: document.getElementById("bpsValue"),
+  zoomInBtn: document.getElementById("zoomInBtn"),
+  zoomOutBtn: document.getElementById("zoomOutBtn"),
+  zoomValue: document.getElementById("zoomValue"),
   villageGrid: document.getElementById("villageGrid"),
   villageTitle: document.getElementById("villageTitle"),
   storeList: document.getElementById("storeList"),
@@ -73,8 +77,12 @@ function autoClicksPerSecond(axolotto) {
   return Math.min(axolotto.toys, axolotto.toySlots) * TOY_AUTO_PER_LEVEL;
 }
 
+function axolottoBps(axolotto) {
+  return autoClicksPerSecond(axolotto) * bubblesPerClick(axolotto);
+}
+
 function totalBubblesPerSecond() {
-  return state.axolottos.reduce((sum, ax) => sum + autoClicksPerSecond(ax) * bubblesPerClick(ax), 0);
+  return state.axolottos.reduce((sum, ax) => sum + axolottoBps(ax), 0);
 }
 
 function unlockSlotCost() {
@@ -86,6 +94,13 @@ function nextHouseCost() {
   return 120 + (state.houses - 1) * 90;
 }
 
+function applyZoom() {
+  const zoom = Math.max(0.6, Math.min(1.8, state.zoom));
+  const cardMin = Math.round(245 * zoom);
+  ui.villageGrid.style.setProperty("--village-card-min", `${cardMin}px`);
+  ui.zoomValue.textContent = `${Math.round(zoom * 100)}%`;
+}
+
 function renderResources() {
   ui.bubblesValue.textContent = state.bubbles.toFixed(1);
   ui.woodValue.textContent = state.wood.toFixed(1);
@@ -95,6 +110,7 @@ function renderResources() {
   ui.woodWrap.hidden = state.wood <= 0;
   ui.housesWrap.hidden = state.houses <= 1;
   ui.villageTitle.textContent = `Village Space (${state.unlockedSlots}/${state.houses * SLOTS_PER_HOUSE} slots unlocked)`;
+  applyZoom();
 }
 
 function drawFallbackAxolotto(ctx, axolotto) {
@@ -137,9 +153,9 @@ function drawFallbackAxolotto(ctx, axolotto) {
 function spawnBubbleGain(node, amount) {
   const gain = document.createElement("span");
   gain.className = "bubble-gain";
-  gain.textContent = `+${amount.toFixed(1)} 🫧`;
+  gain.textContent = `+${amount.toFixed(1)} bubbles`;
   node.appendChild(gain);
-  setTimeout(() => gain.remove(), 750);
+  setTimeout(() => gain.remove(), 1000);
 }
 
 function renderAxolottoCard(axolotto) {
@@ -196,9 +212,9 @@ function buyAxolotto() {
 }
 
 function buyWood() {
-  if (state.bubbles < 12) return;
-  state.bubbles -= 12;
-  state.wood += 12;
+  if (state.bubbles < 20) return;
+  state.bubbles -= 20;
+  state.wood += 1;
 }
 
 function unlockSlot() {
@@ -237,9 +253,9 @@ function renderStore() {
       onBuy: buyAxolotto,
     },
     {
-      name: "Wood Bundle",
-      description: "Buy 12 wood to unlock empty slots and buy the next house.",
-      cost: () => "12 bubbles",
+      name: "1 Wood",
+      description: "Buy one piece of wood for slot unlocks and village expansion.",
+      cost: () => "20 bubbles",
       onBuy: buyWood,
     },
     {
@@ -258,7 +274,7 @@ function renderStore() {
     const cost = item.cost();
     const disabled = item.disabled
       ? item.disabled()
-      : cost === null || (typeof cost === "string" && cost.includes("bubbles") && state.bubbles < 12);
+      : cost === null || (typeof cost === "string" && cost.includes("bubbles") && state.bubbles < Number.parseInt(cost, 10));
 
     node.querySelector(".item-name").textContent = item.name;
     node.querySelector(".item-description").textContent = item.description;
@@ -275,37 +291,59 @@ function renderStore() {
   });
 }
 
+function villageBps(houseIndex) {
+  const start = houseIndex * SLOTS_PER_HOUSE;
+  const end = start + SLOTS_PER_HOUSE;
+  return state.axolottos.slice(start, end).reduce((sum, ax) => sum + axolottoBps(ax), 0);
+}
+
 function renderVillage() {
   ui.villageGrid.innerHTML = "";
-  const maxSlots = state.houses * SLOTS_PER_HOUSE;
 
-  for (let slotIndex = 0; slotIndex < maxSlots; slotIndex += 1) {
-    if (slotIndex < state.unlockedSlots) {
-      const axolotto = state.axolottos[slotIndex];
-      if (axolotto) {
-        ui.villageGrid.appendChild(renderAxolottoCard(axolotto));
+  for (let houseIndex = 0; houseIndex < state.houses; houseIndex += 1) {
+    const village = document.createElement("section");
+    village.className = "village-block";
+
+    const heading = document.createElement("h3");
+    heading.className = "village-block-title";
+    heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s`;
+    village.appendChild(heading);
+
+    const slotsGrid = document.createElement("div");
+    slotsGrid.className = "village-slots";
+
+    for (let localSlot = 0; localSlot < SLOTS_PER_HOUSE; localSlot += 1) {
+      const slotIndex = houseIndex * SLOTS_PER_HOUSE + localSlot;
+      if (slotIndex < state.unlockedSlots) {
+        const axolotto = state.axolottos[slotIndex];
+        if (axolotto) {
+          slotsGrid.appendChild(renderAxolottoCard(axolotto));
+        } else {
+          const emptyNode = ui.emptySlotTemplate.content.firstElementChild.cloneNode(true);
+          slotsGrid.appendChild(emptyNode);
+        }
       } else {
-        const node = ui.emptySlotTemplate.content.firstElementChild.cloneNode(true);
-        ui.villageGrid.appendChild(node);
+        const lockedNode = ui.lockedSlotTemplate.content.firstElementChild.cloneNode(true);
+        const button = lockedNode.querySelector(".unlock-slot-btn");
+        const cost = unlockSlotCost();
+        button.textContent = `Unlock for ${cost} wood`;
+        button.disabled = state.wood < cost;
+        button.addEventListener("click", () => {
+          unlockSlot();
+          renderAll();
+        });
+        slotsGrid.appendChild(lockedNode);
       }
-    } else {
-      const node = ui.lockedSlotTemplate.content.firstElementChild.cloneNode(true);
-      const button = node.querySelector(".unlock-slot-btn");
-      const cost = unlockSlotCost();
-      button.textContent = `Unlock for ${cost} wood`;
-      button.disabled = state.wood < cost;
-      button.addEventListener("click", () => {
-        unlockSlot();
-        renderAll();
-      });
-      ui.villageGrid.appendChild(node);
     }
+
+    village.appendChild(slotsGrid);
+    ui.villageGrid.appendChild(village);
   }
 }
 
 function tick(deltaSeconds) {
   state.axolottos.forEach((ax) => {
-    const gained = autoClicksPerSecond(ax) * bubblesPerClick(ax) * deltaSeconds;
+    const gained = axolottoBps(ax) * deltaSeconds;
     state.bubbles += gained;
   });
 }
@@ -319,13 +357,31 @@ function renderAll() {
 function start() {
   state.axolottos.push(createAxolotto("common"));
 
+  ui.zoomOutBtn.addEventListener("click", () => {
+    state.zoom = Math.max(0.6, state.zoom - 0.1);
+    applyZoom();
+  });
+
+  ui.zoomInBtn.addEventListener("click", () => {
+    state.zoom = Math.min(1.8, state.zoom + 0.1);
+    applyZoom();
+  });
+
   let previous = performance.now();
+  let sinceStoreRefresh = 0;
+
   setInterval(() => {
     const now = performance.now();
     const delta = (now - previous) / 1000;
     previous = now;
     tick(delta);
     renderResources();
+
+    sinceStoreRefresh += delta;
+    if (sinceStoreRefresh >= 0.5) {
+      renderStore();
+      sinceStoreRefresh = 0;
+    }
   }, 100);
 
   renderAll();

@@ -21,6 +21,9 @@ body {
 }
 
 .top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   gap: 1rem;
   align-items: center;
@@ -28,13 +31,41 @@ body {
   flex-wrap: wrap;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid #2a3a5c;
-  background: #11182a99;
-  backdrop-filter: blur(6px);
+  background: #11182ae8;
+  backdrop-filter: blur(8px);
+}
+
+.top-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .top-bar h1 {
   margin: 0;
   font-size: 1.4rem;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--panel);
+  border: 1px solid #2d3d61;
+  border-radius: 8px;
+  padding: 0.25rem 0.4rem;
+}
+
+.zoom-controls button {
+  padding: 0.2rem 0.55rem;
+  min-width: 32px;
+}
+
+#zoomValue {
+  color: var(--muted);
+  font-size: 0.9rem;
+  min-width: 48px;
+  text-align: center;
 }
 
 .resource-strip {
@@ -71,7 +102,19 @@ body {
 .village-grid {
   margin-top: 1rem;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+  gap: 1rem;
+  --village-card-min: 245px;
+}
+
+.village-block-title {
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+.village-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--village-card-min), 1fr));
   gap: 0.85rem;
 }
 
@@ -119,11 +162,16 @@ body {
 .bubble-gain {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 56%;
   transform: translate(-50%, -50%);
-  color: #7deb9f;
-  font-weight: 700;
-  animation: riseFade 0.75s ease-out forwards;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #d2def8;
+  border-radius: 999px;
+  box-shadow: 0 10px 28px #00000040;
+  font-weight: 800;
+  padding: 0.25rem 0.65rem;
+  animation: riseFade 1s ease-out forwards;
   pointer-events: none;
 }
 
@@ -132,9 +180,12 @@ body {
     opacity: 0;
     transform: translate(-50%, 0);
   }
-  to {
+  15% {
     opacity: 1;
-    transform: translate(-50%, -65px);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -90px);
   }
 }
 
