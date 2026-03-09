@@ -134,7 +134,7 @@ function toyCost() {
 }
 
 function axolottoCost() {
-  return 18 + state.axolottos.length * 6;
+  return (18 + state.axolottos.length * 6) * 5;
 }
 
 function unlockSlotCost() {
@@ -146,6 +146,10 @@ function nextHouseCost() {
   return 30 + (state.houses - 1) * 22;
 }
 
+function whole(value) {
+  return Math.floor(value);
+}
+
 function applyZoom() {
   state.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, state.zoom));
   const cardMin = Math.max(90, Math.round(245 * state.zoom));
@@ -154,11 +158,11 @@ function applyZoom() {
 }
 
 function renderResources() {
-  ui.bubblesValue.textContent = state.bubbles.toFixed(1);
-  ui.woodValue.textContent = state.wood.toFixed(1);
+  ui.bubblesValue.textContent = `${whole(state.bubbles)}`;
+  ui.woodValue.textContent = `${whole(state.wood)}`;
   ui.housesValue.textContent = `${state.houses}`;
-  ui.bpsValue.textContent = totalBubblesPerSecond().toFixed(1);
-  ui.wpsValue.textContent = totalWoodPerSecond().toFixed(1);
+  ui.bpsValue.textContent = `${whole(totalBubblesPerSecond())}`;
+  ui.wpsValue.textContent = `${whole(totalWoodPerSecond())}`;
 
   ui.woodWrap.hidden = state.wood <= 0;
   ui.housesWrap.hidden = state.houses <= 1;
@@ -396,7 +400,7 @@ function renderVillage() {
 
     const heading = document.createElement("h3");
     heading.className = "village-block-title";
-    heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+    heading.textContent = `Village ${houseIndex + 1} • ${whole(villageBps(houseIndex))} bubbles/s • ${whole(villageWoodPerSecond(houseIndex))} wood/s`;
     villageNode.appendChild(heading);
 
     const villageControls = document.createElement("div");
@@ -404,8 +408,8 @@ function renderVillage() {
 
     const icon = document.createElement("img");
     icon.className = "village-icon";
-    icon.src = "Images/axolotls/Common/normal.png";
-    icon.alt = "Village icon";
+    icon.src = "Images/houses/Common/1.png";
+    icon.alt = "Village house";
     villageControls.appendChild(icon);
 
     const collectBtn = document.createElement("button");
@@ -484,7 +488,7 @@ function refreshVillagePanels() {
 
     const heading = villageNode.querySelector('.village-block-title');
     if (heading) {
-      heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+      heading.textContent = `Village ${houseIndex + 1} • ${whole(villageBps(houseIndex))} bubbles/s • ${whole(villageWoodPerSecond(houseIndex))} wood/s`;
     }
 
     const collectBtn = villageNode.querySelector('.collect-wood-btn');
