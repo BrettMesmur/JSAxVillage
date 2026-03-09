@@ -6,8 +6,6 @@
   --text: #eaf1ff;
   --muted: #a6b7d8;
   --accent: #5ed6ff;
-  --success: #7deb9f;
-  --warning: #f5ca6f;
 }
 
 * {
@@ -70,28 +68,6 @@ body {
   padding: 1rem;
 }
 
-.panel-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.panel-note {
-  margin-top: 0.4rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.toggle-label {
-  color: var(--muted);
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
 .village-grid {
   margin-top: 1rem;
   display: grid;
@@ -104,6 +80,11 @@ body {
   border-radius: 10px;
   border: 1px solid #374b73;
   overflow: hidden;
+  position: relative;
+}
+
+.ax-card.clickable {
+  cursor: pointer;
 }
 
 .ax-canvas {
@@ -126,6 +107,35 @@ body {
 .item-description {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.empty-slot,
+.locked-slot {
+  min-height: 230px;
+  display: flex;
+  align-items: center;
+}
+
+.bubble-gain {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #7deb9f;
+  font-weight: 700;
+  animation: riseFade 0.75s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes riseFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -65px);
+  }
 }
 
 button {
@@ -159,7 +169,8 @@ button:disabled {
   margin: 0 0 0.25rem;
 }
 
-.buy-btn {
+.buy-btn,
+.unlock-slot-btn {
   width: 100%;
 }
 

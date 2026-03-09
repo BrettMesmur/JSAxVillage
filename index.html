@@ -11,8 +11,8 @@
       <h1>Axolotto Village</h1>
       <div class="resource-strip">
         <div class="resource-card"><span>Bubbles</span><strong id="bubblesValue">0</strong></div>
-        <div class="resource-card"><span>Wood</span><strong id="woodValue">0</strong></div>
-        <div class="resource-card"><span>Houses</span><strong id="housesValue">0</strong></div>
+        <div class="resource-card" id="woodResource"><span>Wood</span><strong id="woodValue">0</strong></div>
+        <div class="resource-card" id="housesResource"><span>Houses</span><strong id="housesValue">0</strong></div>
         <div class="resource-card"><span>Bubble/s</span><strong id="bpsValue">0</strong></div>
       </div>
     </header>
@@ -20,13 +20,8 @@
     <main class="layout">
       <section class="panel village-panel">
         <div class="panel-title-row">
-          <h2>Village Space (6 Axolotto slots)</h2>
-          <label class="toggle-label">
-            <input id="spriteToggle" type="checkbox" />
-            Prefer sprites when available
-          </label>
+          <h2 id="villageTitle">Village Space (6/6 slots unlocked)</h2>
         </div>
-        <p class="panel-note">Fallback rendering uses simple shapes and works without art assets.</p>
         <div id="villageGrid" class="village-grid"></div>
       </section>
 
@@ -37,13 +32,31 @@
     </main>
 
     <template id="axolottoCardTemplate">
-      <article class="ax-card">
+      <article class="ax-card clickable">
         <canvas width="240" height="170" class="ax-canvas" aria-label="Axolotto"></canvas>
         <div class="ax-meta">
           <h3 class="ax-name"></h3>
           <p class="ax-rarity"></p>
           <p class="ax-stats"></p>
-          <button class="click-btn">Click for bubbles</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="emptySlotTemplate">
+      <article class="ax-card empty-slot">
+        <div class="ax-meta">
+          <h3>Empty Slot</h3>
+          <p class="ax-stats">Purchase an Additional Axolotto in the store to fill this slot.</p>
+        </div>
+      </article>
+    </template>
+
+    <template id="lockedSlotTemplate">
+      <article class="ax-card locked-slot">
+        <div class="ax-meta">
+          <h3>Locked Slot</h3>
+          <p class="ax-stats">Unlock with wood to open another village space.</p>
+          <button class="unlock-slot-btn">Unlock</button>
         </div>
       </article>
     </template>
