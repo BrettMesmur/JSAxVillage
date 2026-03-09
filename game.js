@@ -15,6 +15,7 @@ const SLOTS_PER_HOUSE = 6;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 1.8;
 const SAVE_KEY = "jsax_village_save_v1";
+const COLLECT_COOLDOWN_MS = 10000;
 
 const AXOLOTL_IMAGES = {
   common: [
@@ -67,7 +68,7 @@ const state = {
   axolottos: [],
   houses: STARTING_HOUSES,
   unlockedSlots: STARTING_HOUSES * SLOTS_PER_HOUSE,
-  villages: Array.from({ length: STARTING_HOUSES }, () => ({ decorations: 0, mayor: 0 })),
+  villages: Array.from({ length: STARTING_HOUSES }, () => ({ decorations: 0, mayor: 0, nextCollectAt: 0 })),
   zoom: 1,
 };
 
@@ -352,9 +353,24 @@ function hireMayor(villageIndex) {
   state.villages[villageIndex].mayor += 1;
 }
 
+
+function collectCooldownRemainingMs(villageIndex) {
+  const now = Date.now();
+  return Math.max(0, state.villages[villageIndex].nextCollectAt - now);
+}
+
+function collectButtonLabel(villageIndex) {
+  const gain = woodPerVillageClick(villageIndex).toFixed(1);
+  const remaining = collectCooldownRemainingMs(villageIndex);
+  if (remaining <= 0) return `Collect Wood (+${gain})`;
+  return `Collect in ${Math.ceil(remaining / 1000)}s (+${gain})`;
+}
+
 function collectVillageWood(villageIndex, node) {
+  if (collectCooldownRemainingMs(villageIndex) > 0) return;
   const gain = woodPerVillageClick(villageIndex);
   state.wood += gain;
+  state.villages[villageIndex].nextCollectAt = Date.now() + COLLECT_COOLDOWN_MS;
   spawnBubbleGain(node, gain, "wood");
   renderResources();
   renderStore();
@@ -374,7 +390,7 @@ function buyHouse() {
   if (state.wood < cost) return;
   state.wood -= cost;
   state.houses += 1;
-  state.villages.push({ decorations: 0, mayor: 0 });
+  state.villages.push({ decorations: 0, mayor: 0, nextCollectAt: 0 });
 }
 
 function saveGame() {
@@ -405,6 +421,7 @@ function loadGame() {
   state.villages = Array.from({ length: state.houses }, (_v, i) => ({
     decorations: Math.max(0, Number(villages[i]?.decorations || 0)),
     mayor: Math.max(0, Number(villages[i]?.mayor || 0)),
+    nextCollectAt: Math.max(0, Number(villages[i]?.nextCollectAt || 0)),
   }));
 
   const loadedAx = Array.isArray(data.axolottos) ? data.axolottos.map(rehydrateAxolotto) : [];
@@ -504,7 +521,8 @@ function renderVillage() {
 
     const collectBtn = document.createElement("button");
     collectBtn.className = "collect-wood-btn";
-    collectBtn.textContent = `Collect Wood (+${woodPerVillageClick(houseIndex).toFixed(1)})`;
+    collectBtn.textContent = collectButtonLabel(houseIndex);
+    collectBtn.disabled = collectCooldownRemainingMs(houseIndex) > 0;
     collectBtn.addEventListener("click", () => collectVillageWood(houseIndex, villageControls));
 
     const decorationsBtn = document.createElement("button");
@@ -527,7 +545,7 @@ function renderVillage() {
 
     const helper = document.createElement("p");
     helper.className = "village-helper";
-    helper.textContent = `Decorations increase wood per click (+1 each level). Mayor auto-collects wood every second based on your current wood per click.`;
+    helper.textContent = `Decorations increase wood per click (+1 each level). Mayor auto-collects wood every second based on your current wood per click. Manual collect is available every 10 seconds.`;
 
     villageControls.append(collectBtn, decorationsBtn, mayorBtn);
     villageNode.append(villageControls, helper);
@@ -566,7 +584,8 @@ function refreshVillagePanels() {
 
     villageNode.querySelector(".village-block-title").textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
     const collectBtn = villageNode.querySelector(".collect-wood-btn");
-    collectBtn.textContent = `Collect Wood (+${woodPerVillageClick(houseIndex).toFixed(1)})`;
+    collectBtn.textContent = collectButtonLabel(houseIndex);
+    collectBtn.disabled = collectCooldownRemainingMs(houseIndex) > 0;
 
     const decorationsBtn = villageNode.querySelector(".decorations-btn");
     decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${decorationCost(houseIndex)} wood)`;
