@@ -175,7 +175,7 @@ body {
 .ax-canvas {
   width: 100%;
   display: block;
-  background: linear-gradient(180deg, #2d4169, #1e2a42);
+  background: linear-gradient(180deg, rgb(45 65 105 / 50%), rgb(30 42 66 / 50%));
 }
 
 .ax-meta {
