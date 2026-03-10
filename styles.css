@@ -273,6 +273,29 @@ button:disabled {
   width: 100%;
 }
 
+
+.bulk-buy-controls {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.bulk-buy-price {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.bulk-buy-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.bulk-option-btn.is-active {
+  outline: 2px solid #ffffff;
+  box-shadow: inset 0 0 0 2px #0a1b2b;
+}
+
 @media (max-width: 920px) {
   .layout {
     grid-template-columns: 1fr;

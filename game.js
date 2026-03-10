@@ -54,22 +54,153 @@ const AXOLOTL_IMAGES = {
 };
 
 const RARITY_BASE_COST = {
-  common: 90,
-  rare: 240,
-  epic: 620,
-  legendary: 1650,
-  reallyawesome: 4200,
+  common: 130,
+  rare: 900,
+  epic: 5200,
+  legendary: 36000,
+  reallyawesome: 240000,
 };
 
+const RARITY_COST_GROWTH = {
+  common: 1.24,
+  rare: 1.28,
+  epic: 1.33,
+  legendary: 1.38,
+  reallyawesome: 1.45,
+};
+
+const FOOD_BASE_COST = 14;
+const FOOD_COST_GROWTH = 1.115;
+const TOY_BASE_COST = 24;
+const TOY_COST_GROWTH = 1.12;
+const WOOD_BASE_COST = 30;
+const WOOD_COST_GROWTH = 1.09;
+
+const RARITY_UNLOCK_REQUIREMENTS = {
+  common: {},
+  rare: { common: 3 },
+  epic: { common: 4, rare: 3 },
+  legendary: { common: 5, rare: 4, epic: 3 },
+  reallyawesome: { common: 6, rare: 5, epic: 4, legendary: 3 },
+};
+
+const BULK_AMOUNTS = [1, 10, 100];
+
+const PROGRESSION_COST_MULTIPLIER = 0.6;
+const PROGRESSION_GROWTH_DAMPING = 0.88;
+const BUBBLE_GAIN_MULTIPLIER = 1.18;
+const WOOD_GAIN_MULTIPLIER = 1.18;
+
+function tunedCost(baseCost) {
+  return baseCost * PROGRESSION_COST_MULTIPLIER;
+}
+
+function tunedGrowth(growth) {
+  return 1 + (growth - 1) * PROGRESSION_GROWTH_DAMPING;
+}
+
+function normalizeBigParts(mantissa, exponent) {
+  if (!Number.isFinite(mantissa) || mantissa <= 0) return { m: 0, e: 0 };
+  let m = mantissa;
+  let e = exponent;
+  while (m >= 10) {
+    m /= 10;
+    e += 1;
+  }
+  while (m < 1) {
+    m *= 10;
+    e -= 1;
+  }
+  return { m, e };
+}
+
+function toBig(value) {
+  if (typeof value === "object" && value && typeof value.m === "number" && typeof value.e === "number") {
+    return normalizeBigParts(value.m, value.e);
+  }
+  const num = Number(value) || 0;
+  if (num <= 0 || !Number.isFinite(num)) return { m: 0, e: 0 };
+  const exponent = Math.floor(Math.log10(num));
+  return normalizeBigParts(num / 10 ** exponent, exponent);
+}
+
+function bigCmp(a, b) {
+  const left = toBig(a);
+  const right = toBig(b);
+  if (left.m === 0 && right.m === 0) return 0;
+  if (left.e !== right.e) return left.e > right.e ? 1 : -1;
+  if (Math.abs(left.m - right.m) < 1e-12) return 0;
+  return left.m > right.m ? 1 : -1;
+}
+
+function bigAdd(a, b) {
+  const left = toBig(a);
+  const right = toBig(b);
+  if (left.m === 0) return right;
+  if (right.m === 0) return left;
+  if (left.e - right.e > 15) return left;
+  if (right.e - left.e > 15) return right;
+
+  if (left.e >= right.e) {
+    const scaled = right.m * 10 ** (right.e - left.e);
+    return normalizeBigParts(left.m + scaled, left.e);
+  }
+  const scaled = left.m * 10 ** (left.e - right.e);
+  return normalizeBigParts(right.m + scaled, right.e);
+}
+
+function bigSub(a, b) {
+  if (bigCmp(a, b) < 0) return { m: 0, e: 0 };
+  const left = toBig(a);
+  const right = toBig(b);
+  if (right.m === 0) return left;
+  if (left.e - right.e > 15) return left;
+
+  const scaled = right.m * 10 ** (right.e - left.e);
+  return normalizeBigParts(left.m - scaled, left.e);
+}
+
+function bigMul(a, factor) {
+  const left = toBig(a);
+  if (left.m === 0 || factor === 0) return { m: 0, e: 0 };
+  return normalizeBigParts(left.m * factor, left.e);
+}
+
+function formatBig(value, decimals = 1) {
+  const big = toBig(value);
+  if (big.m === 0) return "0";
+
+  const suffixes = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
+  const group = Math.floor(big.e / 3);
+
+  if (group <= 0) {
+    return Math.floor(big.m * 10 ** big.e).toLocaleString();
+  }
+
+  if (group < suffixes.length) {
+    const adjusted = big.m * 10 ** (big.e - group * 3);
+    const rounded = adjusted.toFixed(decimals).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+    return `${rounded}${suffixes[group]}`;
+  }
+
+  return `${big.m.toFixed(2)}e${big.e}`;
+}
+
+function canAfford(resource, cost) {
+  return bigCmp(resource, cost) >= 0;
+}
+
 const state = {
-  bubbles: 0,
-  wood: 0,
+  bubbles: toBig(0),
+  wood: toBig(0),
   spriteMode: true,
   axolottos: [],
   houses: STARTING_HOUSES,
   unlockedSlots: STARTING_HOUSES * SLOTS_PER_HOUSE,
   villages: Array.from({ length: STARTING_HOUSES }, () => ({ decorations: 0, mayor: 0, nextCollectAt: 0 })),
   zoom: 1,
+  woodPurchases: 0,
+  storeBulkSelection: { food: 1, toy: 1, wood: 1 },
 };
 
 const ui = {
@@ -145,7 +276,7 @@ function weightedRarityRoll() {
 function bubblesPerClick(axolotto) {
   const foodBoost = 1 + Math.min(axolotto.food, axolotto.foodSlots) * axolotto.foodPerLevel;
   const houseBoost = 1 + (state.houses - 1) * 0.08;
-  return axolotto.basePerClick * foodBoost * houseBoost;
+  return axolotto.basePerClick * foodBoost * houseBoost * BUBBLE_GAIN_MULTIPLIER;
 }
 
 function autoClicksPerSecond(axolotto) {
@@ -162,12 +293,14 @@ function totalBubblesPerSecond() {
 
 function decorationCost(villageIndex) {
   const village = state.villages[villageIndex];
-  return 8 + villageIndex * 6 + village.decorations * 10;
+  const base = 12 + villageIndex * 8;
+  return toBig(tunedCost(base) * tunedGrowth(1.18) ** village.decorations);
 }
 
 function mayorCost(villageIndex) {
   const village = state.villages[villageIndex];
-  return 20 + villageIndex * 10 + village.mayor * 18;
+  const base = 30 + villageIndex * 12;
+  return toBig(tunedCost(base) * tunedGrowth(1.2) ** village.mayor);
 }
 
 function woodPerVillageClick(villageIndex) {
@@ -176,7 +309,7 @@ function woodPerVillageClick(villageIndex) {
 
 function villageWoodPerSecond(villageIndex) {
   const village = state.villages[villageIndex];
-  return village.mayor * woodPerVillageClick(villageIndex) * 0.4;
+  return village.mayor * woodPerVillageClick(villageIndex) * 0.4 * WOOD_GAIN_MULTIPLIER;
 }
 
 function totalWoodPerSecond() {
@@ -192,11 +325,11 @@ function totalToyUpgrades() {
 }
 
 function foodCost() {
-  return 10 + totalFoodUpgrades() * 2;
+  return toBig(tunedCost(FOOD_BASE_COST) * tunedGrowth(FOOD_COST_GROWTH) ** totalFoodUpgrades());
 }
 
 function toyCost() {
-  return 14 + totalToyUpgrades() * 3;
+  return toBig(tunedCost(TOY_BASE_COST) * tunedGrowth(TOY_COST_GROWTH) ** totalToyUpgrades());
 }
 
 function rarityOwnedCount(rarity) {
@@ -205,20 +338,88 @@ function rarityOwnedCount(rarity) {
 
 function axolottoCost(rarity) {
   const base = RARITY_BASE_COST[rarity] || RARITY_BASE_COST.common;
-  return Math.floor(base * (1 + rarityOwnedCount(rarity) * 0.55));
+  const rarityGrowth = RARITY_COST_GROWTH[rarity] || RARITY_COST_GROWTH.common;
+  const ownedGrowth = tunedGrowth(rarityGrowth) ** rarityOwnedCount(rarity);
+  const globalGrowth = tunedGrowth(1.015) ** state.axolottos.length;
+  return toBig(tunedCost(base) * ownedGrowth * globalGrowth);
 }
 
 function unlockSlotCost() {
   const purchasedSlots = state.unlockedSlots - STARTING_HOUSES * SLOTS_PER_HOUSE;
-  return 16 + purchasedSlots * 12;
+  return toBig(tunedCost(20) * tunedGrowth(1.16) ** purchasedSlots);
 }
 
 function nextHouseCost() {
-  return 42 + (state.houses - 1) * 28;
+  return toBig(tunedCost(70) * tunedGrowth(1.45) ** (state.houses - 1));
 }
 
-function whole(value) {
-  return Math.floor(value);
+function woodCost() {
+  return toBig(tunedCost(WOOD_BASE_COST) * tunedGrowth(WOOD_COST_GROWTH) ** state.woodPurchases);
+}
+
+function maxedAxolottosByRarity(rarity) {
+  return state.axolottos.filter((ax) => ax.rarity === rarity && ax.food >= ax.foodSlots && ax.toys >= ax.toySlots).length;
+}
+
+function rarityUnlocked(rarity) {
+  const requirements = RARITY_UNLOCK_REQUIREMENTS[rarity] || {};
+  return Object.entries(requirements).every(([requiredRarity, count]) => maxedAxolottosByRarity(requiredRarity) >= count);
+}
+
+function rarityUnlockText(rarity) {
+  const requirements = RARITY_UNLOCK_REQUIREMENTS[rarity] || {};
+  const missing = Object.entries(requirements)
+    .map(([requiredRarity, count]) => ({ requiredRarity, count, current: maxedAxolottosByRarity(requiredRarity) }))
+    .filter((entry) => entry.current < entry.count);
+
+  if (!missing.length) return "";
+
+  return missing
+    .map((entry) => `${entry.current}/${entry.count} fully upgraded ${rarityLabel(entry.requiredRarity).toLowerCase()} axolottos`)
+    .join(" • ");
+}
+
+function upgradeBaseCost(type) {
+  return type === "food" ? tunedCost(FOOD_BASE_COST) : tunedCost(TOY_BASE_COST);
+}
+
+function upgradeGrowth(type) {
+  return type === "food" ? tunedGrowth(FOOD_COST_GROWTH) : tunedGrowth(TOY_COST_GROWTH);
+}
+
+function planUpgradePurchase(type, amount) {
+  const key = type === "food" ? "food" : "toys";
+  const slotsKey = type === "food" ? "foodSlots" : "toySlots";
+  const levels = state.axolottos.map((ax) => ax[key]);
+  const caps = state.axolottos.map((ax) => ax[slotsKey]);
+  let totalUpgrades = levels.reduce((sum, value) => sum + value, 0);
+  let spent = toBig(0);
+  let purchased = 0;
+
+  while (purchased < amount) {
+    const targetIndex = levels.findIndex((value, index) => value < caps[index]);
+    if (targetIndex < 0) break;
+    const cost = toBig(upgradeBaseCost(type) * upgradeGrowth(type) ** totalUpgrades);
+    if (!canAfford(state.bubbles, bigAdd(spent, cost))) break;
+    spent = bigAdd(spent, cost);
+    levels[targetIndex] += 1;
+    totalUpgrades += 1;
+    purchased += 1;
+  }
+
+  return { purchased, spent };
+}
+
+function woodPurchasePlan(amount) {
+  let purchases = 0;
+  let spent = toBig(0);
+  let currentCost = woodCost();
+  while (purchases < amount && canAfford(state.bubbles, bigAdd(spent, currentCost))) {
+    spent = bigAdd(spent, currentCost);
+    currentCost = bigMul(currentCost, tunedGrowth(WOOD_COST_GROWTH));
+    purchases += 1;
+  }
+  return { purchased: purchases, spent };
 }
 
 function applyZoom() {
@@ -229,13 +430,13 @@ function applyZoom() {
 }
 
 function renderResources() {
-  ui.bubblesValue.textContent = `${whole(state.bubbles)}`;
-  ui.woodValue.textContent = `${whole(state.wood)}`;
+  ui.bubblesValue.textContent = formatBig(state.bubbles);
+  ui.woodValue.textContent = formatBig(state.wood);
   ui.housesValue.textContent = `${state.houses}`;
-  ui.bpsValue.textContent = `${whole(totalBubblesPerSecond())}`;
-  ui.wpsValue.textContent = `${whole(totalWoodPerSecond())}`;
+  ui.bpsValue.textContent = formatBig(toBig(totalBubblesPerSecond()), 1);
+  ui.wpsValue.textContent = formatBig(toBig(totalWoodPerSecond()), 1);
 
-  ui.woodWrap.hidden = state.wood <= 0;
+  ui.woodWrap.hidden = bigCmp(state.wood, toBig(0)) <= 0;
   ui.housesWrap.hidden = state.houses <= 1;
   ui.villageTitle.textContent = `Village Space (${state.unlockedSlots}/${state.houses * SLOTS_PER_HOUSE} slots unlocked)`;
   applyZoom();
@@ -273,7 +474,7 @@ function drawFallbackAxolotto(ctx, axolotto) {
 function spawnBubbleGain(node, amount, label = "bubbles") {
   const gain = document.createElement("span");
   gain.className = "bubble-gain";
-  gain.textContent = `+${amount.toFixed(1)} ${label}`;
+  gain.textContent = `+${formatBig(toBig(amount), 1)} ${label}`;
   node.appendChild(gain);
   setTimeout(() => gain.remove(), 1000);
 }
@@ -320,7 +521,7 @@ function renderAxolottoCard(axolotto) {
 
   node.addEventListener("click", () => {
     const gained = bubblesPerClick(axolotto);
-    state.bubbles += gained;
+    state.bubbles = bigAdd(state.bubbles, toBig(gained));
     spawnBubbleGain(node, gained);
     renderResources();
     renderStore();
@@ -329,46 +530,54 @@ function renderAxolottoCard(axolotto) {
   return node;
 }
 
-function buyFood() {
-  const target = state.axolottos.find((ax) => ax.food < ax.foodSlots);
-  const cost = foodCost();
-  if (!target || state.bubbles < cost) return;
-  state.bubbles -= cost;
-  target.food += 1;
+function buyFood(amount = 1) {
+  const plan = planUpgradePurchase("food", amount);
+  if (plan.purchased < amount) return;
+  state.bubbles = bigSub(state.bubbles, plan.spent);
+  for (let i = 0; i < amount; i += 1) {
+    const target = state.axolottos.find((ax) => ax.food < ax.foodSlots);
+    if (!target) break;
+    target.food += 1;
+  }
 }
 
-function buyToy() {
-  const target = state.axolottos.find((ax) => ax.toys < ax.toySlots);
-  const cost = toyCost();
-  if (!target || state.bubbles < cost) return;
-  state.bubbles -= cost;
-  target.toys += 1;
+function buyToy(amount = 1) {
+  const plan = planUpgradePurchase("toy", amount);
+  if (plan.purchased < amount) return;
+  state.bubbles = bigSub(state.bubbles, plan.spent);
+  for (let i = 0; i < amount; i += 1) {
+    const target = state.axolottos.find((ax) => ax.toys < ax.toySlots);
+    if (!target) break;
+    target.toys += 1;
+  }
 }
 
 function buyAxolotto(rarity) {
   const cost = axolottoCost(rarity);
-  if (state.axolottos.length >= state.unlockedSlots || state.bubbles < cost) return;
-  state.bubbles -= cost;
+  if (!rarityUnlocked(rarity) || state.axolottos.length >= state.unlockedSlots || !canAfford(state.bubbles, cost)) return;
+  state.bubbles = bigSub(state.bubbles, cost);
   state.axolottos.push(createAxolotto(rarity));
 }
 
-function buyWood() {
-  if (state.bubbles < 25) return;
-  state.bubbles -= 25;
-  state.wood += 1;
+function buyWood(amount = 1) {
+  const plan = woodPurchasePlan(amount);
+  if (plan.purchased < amount) return;
+  state.bubbles = bigSub(state.bubbles, plan.spent);
+  state.wood = bigAdd(state.wood, toBig(amount));
+  state.woodPurchases += amount;
 }
 
 function upgradeDecorations(villageIndex) {
   const cost = decorationCost(villageIndex);
-  if (state.wood < cost) return;
-  state.wood -= cost;
+  if (!canAfford(state.wood, cost)) return;
+  state.wood = bigSub(state.wood, cost);
   state.villages[villageIndex].decorations += 1;
 }
 
 function hireMayor(villageIndex) {
   const cost = mayorCost(villageIndex);
-  if (state.wood < cost) return;
-  state.wood -= cost;
+  if (!canAfford(state.wood, cost)) return;
+  state.wood = bigSub(state.wood, cost);
   state.villages[villageIndex].mayor += 1;
 }
 
@@ -379,7 +588,7 @@ function collectCooldownRemainingMs(villageIndex) {
 }
 
 function collectButtonLabel(villageIndex) {
-  const gain = woodPerVillageClick(villageIndex).toFixed(1);
+  const gain = formatBig(toBig(woodPerVillageClick(villageIndex)), 1);
   const remaining = collectCooldownRemainingMs(villageIndex);
   if (remaining <= 0) return `Collect Wood (+${gain})`;
   return `Collect in ${Math.ceil(remaining / 1000)}s (+${gain})`;
@@ -388,7 +597,7 @@ function collectButtonLabel(villageIndex) {
 function collectVillageWood(villageIndex, node) {
   if (collectCooldownRemainingMs(villageIndex) > 0) return;
   const gain = woodPerVillageClick(villageIndex);
-  state.wood += gain;
+  state.wood = bigAdd(state.wood, toBig(gain));
   state.villages[villageIndex].nextCollectAt = Date.now() + COLLECT_COOLDOWN_MS;
   spawnBubbleGain(node, gain, "wood");
   renderResources();
@@ -399,15 +608,15 @@ function collectVillageWood(villageIndex, node) {
 function unlockSlot() {
   if (state.unlockedSlots >= state.houses * SLOTS_PER_HOUSE) return;
   const cost = unlockSlotCost();
-  if (state.wood < cost) return;
-  state.wood -= cost;
+  if (!canAfford(state.wood, cost)) return;
+  state.wood = bigSub(state.wood, cost);
   state.unlockedSlots += 1;
 }
 
 function buyHouse() {
   const cost = nextHouseCost();
-  if (state.wood < cost) return;
-  state.wood -= cost;
+  if (!canAfford(state.wood, cost)) return;
+  state.wood = bigSub(state.wood, cost);
   state.houses += 1;
   state.villages.push({ decorations: 0, mayor: 0, nextCollectAt: 0 });
 }
@@ -419,6 +628,7 @@ function saveGame() {
     houses: state.houses,
     unlockedSlots: state.unlockedSlots,
     zoom: state.zoom,
+    woodPurchases: state.woodPurchases,
     villages: state.villages,
     axolottos: state.axolottos.map((ax) => ({ id: ax.id, rarity: ax.rarity, food: ax.food, toys: ax.toys, spritePath: ax.spritePath })),
   };
@@ -430,11 +640,13 @@ function loadGame() {
   if (!raw) return;
   const data = JSON.parse(raw);
 
-  state.bubbles = Math.max(0, Number(data.bubbles || 0));
-  state.wood = Math.max(0, Number(data.wood || 0));
+  state.bubbles = toBig(data.bubbles || 0);
+  state.wood = toBig(data.wood || 0);
   state.houses = Math.max(STARTING_HOUSES, Number(data.houses || STARTING_HOUSES));
   state.unlockedSlots = Math.max(SLOTS_PER_HOUSE, Number(data.unlockedSlots || SLOTS_PER_HOUSE));
   state.zoom = Number(data.zoom || 1);
+  state.woodPurchases = Math.max(0, Number(data.woodPurchases || 0));
+  state.storeBulkSelection = { food: 1, toy: 1, wood: 1 };
 
   const villages = Array.isArray(data.villages) ? data.villages : [];
   state.villages = Array.from({ length: state.houses }, (_v, i) => ({
@@ -448,13 +660,15 @@ function loadGame() {
 }
 
 function resetGameState() {
-  state.bubbles = 0;
-  state.wood = 0;
+  state.bubbles = toBig(0);
+  state.wood = toBig(0);
   state.axolottos = [createAxolotto("common")];
   state.houses = STARTING_HOUSES;
   state.unlockedSlots = STARTING_HOUSES * SLOTS_PER_HOUSE;
   state.villages = Array.from({ length: STARTING_HOUSES }, () => ({ decorations: 0, mayor: 0, nextCollectAt: 0 }));
   state.zoom = 1;
+  state.woodPurchases = 0;
+  state.storeBulkSelection = { food: 1, toy: 1, wood: 1 };
 }
 
 function clearSave() {
@@ -465,33 +679,43 @@ function renderStore() {
   const items = [
     {
       name: "Food",
-      description: "Raise click value; each purchase costs more than the last.",
-      cost: () => (state.axolottos.some((ax) => ax.food < ax.foodSlots) ? `${foodCost()} bubbles` : null),
+      description: "Raise click value; prices scale exponentially with total food upgrades.",
+      currency: "bubbles",
+      key: "food",
+      purchasePlan: (amount) => planUpgradePurchase("food", amount),
       onBuy: buyFood,
     },
     {
       name: "Toy",
-      description: "Raise auto-click speed; each purchase costs more than the last.",
-      cost: () => (state.axolottos.some((ax) => ax.toys < ax.toySlots) ? `${toyCost()} bubbles` : null),
+      description: "Raise auto-click speed; prices scale exponentially with total toy upgrades.",
+      currency: "bubbles",
+      key: "toy",
+      purchasePlan: (amount) => planUpgradePurchase("toy", amount),
       onBuy: buyToy,
     },
     ...RARITY_ORDER.map((rarity) => ({
       name: `Purchase ${rarityLabel(rarity)} Axolotto`,
-      description: `Buy a ${rarity} axolotto with rarity-scaled stats and cost.` ,
-      cost: () => (state.axolottos.length >= state.unlockedSlots ? null : `${axolottoCost(rarity)} bubbles`),
+      description: rarityUnlocked(rarity)
+        ? `Buy a ${rarity} axolotto with rarity-scaled stats and exponentially increasing cost.`
+        : `Locked: ${rarityUnlockText(rarity)}`,
+      cost: () => (state.axolottos.length >= state.unlockedSlots || !rarityUnlocked(rarity) ? null : axolottoCost(rarity)),
+      currency: "bubbles",
       onBuy: () => buyAxolotto(rarity),
     })),
     {
-      name: "1 Wood",
-      description: "Buy one wood resource directly.",
-      cost: () => "25 bubbles",
+      name: "Wood",
+      description: "Buy wood directly with bubbles. Cost scales with each wood purchase.",
+      currency: "bubbles",
+      key: "wood",
+      purchasePlan: woodPurchasePlan,
       onBuy: buyWood,
     },
     {
       name: "New House",
       description: "Adds a new village with 6 more slots and its own upgrades.",
-      cost: () => `${nextHouseCost()} wood`,
-      disabled: () => state.wood < nextHouseCost(),
+      cost: () => nextHouseCost(),
+      currency: "wood",
+      disabled: () => !canAfford(state.wood, nextHouseCost()),
       onBuy: buyHouse,
     },
   ];
@@ -499,25 +723,79 @@ function renderStore() {
   ui.storeList.innerHTML = "";
   items.forEach((item) => {
     const node = ui.storeItemTemplate.content.firstElementChild.cloneNode(true);
-    const cost = item.cost();
-    const disabled = item.disabled
-      ? item.disabled()
-      : cost === null || (typeof cost === "string" && cost.includes("bubbles") && state.bubbles < Number.parseInt(cost, 10));
-
     node.querySelector(".item-name").textContent = item.name;
     node.querySelector(".item-description").textContent = item.description;
 
     const buyBtn = node.querySelector(".buy-btn");
-    buyBtn.textContent = cost === null ? "Unavailable" : `Buy (${cost})`;
-    buyBtn.disabled = disabled;
-    buyBtn.addEventListener("click", () => {
-      item.onBuy();
-      renderAll();
-    });
+
+    if (item.purchasePlan) {
+      buyBtn.remove();
+
+      const controls = document.createElement("div");
+      controls.className = "bulk-buy-controls";
+
+      const selected = state.storeBulkSelection[item.key] || 1;
+      const maxPlan = item.purchasePlan(100);
+      const canBuy10 = maxPlan.purchased >= 10;
+      const canBuy100 = maxPlan.purchased >= 100;
+      const availableAmounts = canBuy10 ? (canBuy100 ? [1, 10, 100] : [1, 10]) : [];
+
+      if (availableAmounts.length && !availableAmounts.includes(selected)) {
+        state.storeBulkSelection[item.key] = availableAmounts[availableAmounts.length - 1];
+      }
+
+      const activeAmount = availableAmounts.length ? state.storeBulkSelection[item.key] : 1;
+      const activePlan = item.purchasePlan(activeAmount);
+
+      if (availableAmounts.length) {
+        const row = document.createElement("div");
+        row.className = "bulk-buy-row";
+
+        availableAmounts.forEach((amount) => {
+          const optionBtn = document.createElement("button");
+          optionBtn.type = "button";
+          optionBtn.className = `buy-btn bulk-option-btn${amount === activeAmount ? " is-active" : ""}`;
+          optionBtn.textContent = `+${amount}`;
+          optionBtn.addEventListener("click", () => {
+            state.storeBulkSelection[item.key] = amount;
+            renderStore();
+          });
+          row.appendChild(optionBtn);
+        });
+
+        controls.appendChild(row);
+      }
+
+      const purchaseBtn = document.createElement("button");
+      purchaseBtn.type = "button";
+      purchaseBtn.className = "buy-btn";
+      purchaseBtn.textContent = activePlan.purchased >= activeAmount
+        ? `Purchase +${activeAmount} (${formatBig(activePlan.spent)} ${item.currency})`
+        : "Unavailable";
+      purchaseBtn.disabled = activePlan.purchased < activeAmount;
+      purchaseBtn.addEventListener("click", () => {
+        item.onBuy(activeAmount);
+        renderAll();
+      });
+
+      controls.appendChild(purchaseBtn);
+      node.appendChild(controls);
+    } else {
+      const cost = item.cost();
+      const currencyResource = item.currency === "wood" ? state.wood : state.bubbles;
+      const disabled = item.disabled ? item.disabled() : cost === null || !canAfford(currencyResource, cost);
+      buyBtn.textContent = cost === null ? "Unavailable" : `Buy (${formatBig(cost)} ${item.currency})`;
+      buyBtn.disabled = disabled;
+      buyBtn.addEventListener("click", () => {
+        item.onBuy();
+        renderAll();
+      });
+    }
 
     ui.storeList.appendChild(node);
   });
 }
+
 
 function villageBps(houseIndex) {
   const start = houseIndex * SLOTS_PER_HOUSE;
@@ -536,7 +814,7 @@ function renderVillage() {
 
     const heading = document.createElement("h3");
     heading.className = "village-block-title";
-    heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+    heading.textContent = `Village ${houseIndex + 1} • ${formatBig(toBig(villageBps(houseIndex)), 1)} bubbles/s • ${formatBig(toBig(villageWoodPerSecond(houseIndex)), 1)} wood/s`;
     villageNode.appendChild(heading);
 
     const villageControls = document.createElement("div");
@@ -550,8 +828,8 @@ function renderVillage() {
 
     const decorationsBtn = document.createElement("button");
     decorationsBtn.className = "decorations-btn";
-    decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${decorationCost(houseIndex)} wood)`;
-    decorationsBtn.disabled = state.wood < decorationCost(houseIndex);
+    decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${formatBig(decorationCost(houseIndex))} wood)`;
+    decorationsBtn.disabled = !canAfford(state.wood, decorationCost(houseIndex));
     decorationsBtn.addEventListener("click", () => {
       upgradeDecorations(houseIndex);
       renderAll();
@@ -559,8 +837,8 @@ function renderVillage() {
 
     const mayorBtn = document.createElement("button");
     mayorBtn.className = "mayor-btn";
-    mayorBtn.textContent = `Mayor Lv ${village.mayor} (${mayorCost(houseIndex)} wood)`;
-    mayorBtn.disabled = state.wood < mayorCost(houseIndex);
+    mayorBtn.textContent = `Mayor Lv ${village.mayor} (${formatBig(mayorCost(houseIndex))} wood)`;
+    mayorBtn.disabled = !canAfford(state.wood, mayorCost(houseIndex));
     mayorBtn.addEventListener("click", () => {
       hireMayor(houseIndex);
       renderAll();
@@ -585,8 +863,8 @@ function renderVillage() {
         const lockedNode = ui.lockedSlotTemplate.content.firstElementChild.cloneNode(true);
         const button = lockedNode.querySelector(".unlock-slot-btn");
         const cost = unlockSlotCost();
-        button.textContent = `Unlock for ${cost} wood`;
-        button.disabled = state.wood < cost;
+        button.textContent = `Unlock for ${formatBig(cost)} wood`;
+        button.disabled = !canAfford(state.wood, cost);
         button.addEventListener("click", () => {
           unlockSlot();
           renderAll();
@@ -605,33 +883,33 @@ function refreshVillagePanels() {
     const villageNode = ui.villageGrid.querySelector(`[data-village-index="${houseIndex}"]`);
     if (!villageNode) return;
 
-    villageNode.querySelector(".village-block-title").textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+    villageNode.querySelector(".village-block-title").textContent = `Village ${houseIndex + 1} • ${formatBig(toBig(villageBps(houseIndex)), 1)} bubbles/s • ${formatBig(toBig(villageWoodPerSecond(houseIndex)), 1)} wood/s`;
     const collectBtn = villageNode.querySelector(".collect-wood-btn");
     collectBtn.textContent = collectButtonLabel(houseIndex);
     collectBtn.disabled = collectCooldownRemainingMs(houseIndex) > 0;
 
     const decorationsBtn = villageNode.querySelector(".decorations-btn");
-    decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${decorationCost(houseIndex)} wood)`;
-    decorationsBtn.disabled = state.wood < decorationCost(houseIndex);
+    decorationsBtn.textContent = `Decorations Lv ${village.decorations} (${formatBig(decorationCost(houseIndex))} wood)`;
+    decorationsBtn.disabled = !canAfford(state.wood, decorationCost(houseIndex));
 
     const mayorBtn = villageNode.querySelector(".mayor-btn");
-    mayorBtn.textContent = `Mayor Lv ${village.mayor} (${mayorCost(houseIndex)} wood)`;
-    mayorBtn.disabled = state.wood < mayorCost(houseIndex);
+    mayorBtn.textContent = `Mayor Lv ${village.mayor} (${formatBig(mayorCost(houseIndex))} wood)`;
+    mayorBtn.disabled = !canAfford(state.wood, mayorCost(houseIndex));
   });
 
   ui.villageGrid.querySelectorAll(".unlock-slot-btn").forEach((btn) => {
     const cost = unlockSlotCost();
-    btn.textContent = `Unlock for ${cost} wood`;
-    btn.disabled = state.wood < cost;
+    btn.textContent = `Unlock for ${formatBig(cost)} wood`;
+    btn.disabled = !canAfford(state.wood, cost);
   });
 }
 
 function tick(deltaSeconds) {
   state.axolottos.forEach((ax) => {
-    state.bubbles += axolottoBps(ax) * deltaSeconds;
+    state.bubbles = bigAdd(state.bubbles, toBig(axolottoBps(ax) * deltaSeconds));
   });
   state.villages.forEach((_v, index) => {
-    state.wood += villageWoodPerSecond(index) * deltaSeconds;
+    state.wood = bigAdd(state.wood, toBig(villageWoodPerSecond(index) * deltaSeconds));
   });
 }
 
