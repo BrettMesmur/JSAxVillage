@@ -86,6 +86,19 @@ const RARITY_UNLOCK_REQUIREMENTS = {
 
 const BULK_AMOUNTS = [1, 10, 100];
 
+const PROGRESSION_COST_MULTIPLIER = 0.6;
+const PROGRESSION_GROWTH_DAMPING = 0.88;
+const BUBBLE_GAIN_MULTIPLIER = 1.18;
+const WOOD_GAIN_MULTIPLIER = 1.18;
+
+function tunedCost(baseCost) {
+  return baseCost * PROGRESSION_COST_MULTIPLIER;
+}
+
+function tunedGrowth(growth) {
+  return 1 + (growth - 1) * PROGRESSION_GROWTH_DAMPING;
+}
+
 function normalizeBigParts(mantissa, exponent) {
   if (!Number.isFinite(mantissa) || mantissa <= 0) return { m: 0, e: 0 };
   let m = mantissa;
@@ -263,7 +276,7 @@ function weightedRarityRoll() {
 function bubblesPerClick(axolotto) {
   const foodBoost = 1 + Math.min(axolotto.food, axolotto.foodSlots) * axolotto.foodPerLevel;
   const houseBoost = 1 + (state.houses - 1) * 0.08;
-  return axolotto.basePerClick * foodBoost * houseBoost;
+  return axolotto.basePerClick * foodBoost * houseBoost * BUBBLE_GAIN_MULTIPLIER;
 }
 
 function autoClicksPerSecond(axolotto) {
@@ -281,13 +294,13 @@ function totalBubblesPerSecond() {
 function decorationCost(villageIndex) {
   const village = state.villages[villageIndex];
   const base = 12 + villageIndex * 8;
-  return toBig(base * 1.18 ** village.decorations);
+  return toBig(tunedCost(base) * tunedGrowth(1.18) ** village.decorations);
 }
 
 function mayorCost(villageIndex) {
   const village = state.villages[villageIndex];
   const base = 30 + villageIndex * 12;
-  return toBig(base * 1.2 ** village.mayor);
+  return toBig(tunedCost(base) * tunedGrowth(1.2) ** village.mayor);
 }
 
 function woodPerVillageClick(villageIndex) {
@@ -296,7 +309,7 @@ function woodPerVillageClick(villageIndex) {
 
 function villageWoodPerSecond(villageIndex) {
   const village = state.villages[villageIndex];
-  return village.mayor * woodPerVillageClick(villageIndex) * 0.4;
+  return village.mayor * woodPerVillageClick(villageIndex) * 0.4 * WOOD_GAIN_MULTIPLIER;
 }
 
 function totalWoodPerSecond() {
@@ -312,11 +325,11 @@ function totalToyUpgrades() {
 }
 
 function foodCost() {
-  return toBig(FOOD_BASE_COST * FOOD_COST_GROWTH ** totalFoodUpgrades());
+  return toBig(tunedCost(FOOD_BASE_COST) * tunedGrowth(FOOD_COST_GROWTH) ** totalFoodUpgrades());
 }
 
 function toyCost() {
-  return toBig(TOY_BASE_COST * TOY_COST_GROWTH ** totalToyUpgrades());
+  return toBig(tunedCost(TOY_BASE_COST) * tunedGrowth(TOY_COST_GROWTH) ** totalToyUpgrades());
 }
 
 function rarityOwnedCount(rarity) {
@@ -326,22 +339,22 @@ function rarityOwnedCount(rarity) {
 function axolottoCost(rarity) {
   const base = RARITY_BASE_COST[rarity] || RARITY_BASE_COST.common;
   const rarityGrowth = RARITY_COST_GROWTH[rarity] || RARITY_COST_GROWTH.common;
-  const ownedGrowth = rarityGrowth ** rarityOwnedCount(rarity);
-  const globalGrowth = 1.015 ** state.axolottos.length;
-  return toBig(base * ownedGrowth * globalGrowth);
+  const ownedGrowth = tunedGrowth(rarityGrowth) ** rarityOwnedCount(rarity);
+  const globalGrowth = tunedGrowth(1.015) ** state.axolottos.length;
+  return toBig(tunedCost(base) * ownedGrowth * globalGrowth);
 }
 
 function unlockSlotCost() {
   const purchasedSlots = state.unlockedSlots - STARTING_HOUSES * SLOTS_PER_HOUSE;
-  return toBig(20 * 1.16 ** purchasedSlots);
+  return toBig(tunedCost(20) * tunedGrowth(1.16) ** purchasedSlots);
 }
 
 function nextHouseCost() {
-  return toBig(70 * 1.45 ** (state.houses - 1));
+  return toBig(tunedCost(70) * tunedGrowth(1.45) ** (state.houses - 1));
 }
 
 function woodCost() {
-  return toBig(WOOD_BASE_COST * WOOD_COST_GROWTH ** state.woodPurchases);
+  return toBig(tunedCost(WOOD_BASE_COST) * tunedGrowth(WOOD_COST_GROWTH) ** state.woodPurchases);
 }
 
 function maxedAxolottosByRarity(rarity) {
@@ -367,11 +380,11 @@ function rarityUnlockText(rarity) {
 }
 
 function upgradeBaseCost(type) {
-  return type === "food" ? FOOD_BASE_COST : TOY_BASE_COST;
+  return type === "food" ? tunedCost(FOOD_BASE_COST) : tunedCost(TOY_BASE_COST);
 }
 
 function upgradeGrowth(type) {
-  return type === "food" ? FOOD_COST_GROWTH : TOY_COST_GROWTH;
+  return type === "food" ? tunedGrowth(FOOD_COST_GROWTH) : tunedGrowth(TOY_COST_GROWTH);
 }
 
 function planUpgradePurchase(type, amount) {
@@ -403,7 +416,7 @@ function woodPurchasePlan(amount) {
   let currentCost = woodCost();
   while (purchases < amount && canAfford(state.bubbles, bigAdd(spent, currentCost))) {
     spent = bigAdd(spent, currentCost);
-    currentCost = bigMul(currentCost, WOOD_COST_GROWTH);
+    currentCost = bigMul(currentCost, tunedGrowth(WOOD_COST_GROWTH));
     purchases += 1;
   }
   return { purchased: purchases, spent };
