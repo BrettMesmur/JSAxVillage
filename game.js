@@ -736,28 +736,35 @@ function renderStore() {
 
       const selected = state.storeBulkSelection[item.key] || 1;
       const maxPlan = item.purchasePlan(100);
-      const availableAmounts = BULK_AMOUNTS.filter((amount) => maxPlan.purchased >= amount);
-      if (!availableAmounts.length) availableAmounts.push(1);
-      if (!availableAmounts.includes(selected)) {
+      const canBuy10 = maxPlan.purchased >= 10;
+      const canBuy100 = maxPlan.purchased >= 100;
+      const availableAmounts = canBuy10 ? (canBuy100 ? [1, 10, 100] : [1, 10]) : [];
+
+      if (availableAmounts.length && !availableAmounts.includes(selected)) {
         state.storeBulkSelection[item.key] = availableAmounts[availableAmounts.length - 1];
       }
-      const activeAmount = state.storeBulkSelection[item.key];
+
+      const activeAmount = availableAmounts.length ? state.storeBulkSelection[item.key] : 1;
       const activePlan = item.purchasePlan(activeAmount);
 
-      const row = document.createElement("div");
-      row.className = "bulk-buy-row";
+      if (availableAmounts.length) {
+        const row = document.createElement("div");
+        row.className = "bulk-buy-row";
 
-      availableAmounts.forEach((amount) => {
-        const optionBtn = document.createElement("button");
-        optionBtn.type = "button";
-        optionBtn.className = `buy-btn bulk-option-btn${amount === activeAmount ? " is-active" : ""}`;
-        optionBtn.textContent = `+${amount}`;
-        optionBtn.addEventListener("click", () => {
-          state.storeBulkSelection[item.key] = amount;
-          renderStore();
+        availableAmounts.forEach((amount) => {
+          const optionBtn = document.createElement("button");
+          optionBtn.type = "button";
+          optionBtn.className = `buy-btn bulk-option-btn${amount === activeAmount ? " is-active" : ""}`;
+          optionBtn.textContent = `+${amount}`;
+          optionBtn.addEventListener("click", () => {
+            state.storeBulkSelection[item.key] = amount;
+            renderStore();
+          });
+          row.appendChild(optionBtn);
         });
-        row.appendChild(optionBtn);
-      });
+
+        controls.appendChild(row);
+      }
 
       const purchaseBtn = document.createElement("button");
       purchaseBtn.type = "button";
@@ -771,7 +778,7 @@ function renderStore() {
         renderAll();
       });
 
-      controls.append(row, purchaseBtn);
+      controls.appendChild(purchaseBtn);
       node.appendChild(controls);
     } else {
       const cost = item.cost();
