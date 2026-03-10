@@ -172,10 +172,16 @@ body {
   cursor: pointer;
 }
 
+.ax-art {
+  position: relative;
+  min-height: 170px;
+  background: linear-gradient(180deg, rgb(45 65 105 / 45%), rgb(30 42 66 / 45%));
+}
+
 .ax-canvas {
   width: 100%;
   display: block;
-  background: linear-gradient(180deg, #2d4169, #1e2a42);
+  background: transparent;
 }
 
 .ax-meta {
