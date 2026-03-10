@@ -153,11 +153,24 @@ function bigMul(a, factor) {
   return normalizeBigParts(left.m * factor, left.e);
 }
 
-function formatBig(value, decimals = 2) {
+function formatBig(value, decimals = 1) {
   const big = toBig(value);
   if (big.m === 0) return "0";
-  if (big.e < 6) return Math.floor(big.m * 10 ** big.e).toLocaleString();
-  return `${big.m.toFixed(decimals)}e${big.e}`;
+
+  const suffixes = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
+  const group = Math.floor(big.e / 3);
+
+  if (group <= 0) {
+    return Math.floor(big.m * 10 ** big.e).toLocaleString();
+  }
+
+  if (group < suffixes.length) {
+    const adjusted = big.m * 10 ** (big.e - group * 3);
+    const rounded = adjusted.toFixed(decimals).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+    return `${rounded}${suffixes[group]}`;
+  }
+
+  return `${big.m.toFixed(2)}e${big.e}`;
 }
 
 function canAfford(resource, cost) {
@@ -448,7 +461,7 @@ function drawFallbackAxolotto(ctx, axolotto) {
 function spawnBubbleGain(node, amount, label = "bubbles") {
   const gain = document.createElement("span");
   gain.className = "bubble-gain";
-  gain.textContent = `+${amount.toFixed(1)} ${label}`;
+  gain.textContent = `+${formatBig(toBig(amount), 1)} ${label}`;
   node.appendChild(gain);
   setTimeout(() => gain.remove(), 1000);
 }
@@ -562,7 +575,7 @@ function collectCooldownRemainingMs(villageIndex) {
 }
 
 function collectButtonLabel(villageIndex) {
-  const gain = woodPerVillageClick(villageIndex).toFixed(1);
+  const gain = formatBig(toBig(woodPerVillageClick(villageIndex)), 1);
   const remaining = collectCooldownRemainingMs(villageIndex);
   if (remaining <= 0) return `Collect Wood (+${gain})`;
   return `Collect in ${Math.ceil(remaining / 1000)}s (+${gain})`;
@@ -781,7 +794,7 @@ function renderVillage() {
 
     const heading = document.createElement("h3");
     heading.className = "village-block-title";
-    heading.textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+    heading.textContent = `Village ${houseIndex + 1} • ${formatBig(toBig(villageBps(houseIndex)), 1)} bubbles/s • ${formatBig(toBig(villageWoodPerSecond(houseIndex)), 1)} wood/s`;
     villageNode.appendChild(heading);
 
     const villageControls = document.createElement("div");
@@ -850,7 +863,7 @@ function refreshVillagePanels() {
     const villageNode = ui.villageGrid.querySelector(`[data-village-index="${houseIndex}"]`);
     if (!villageNode) return;
 
-    villageNode.querySelector(".village-block-title").textContent = `Village ${houseIndex + 1} • ${villageBps(houseIndex).toFixed(1)} bubbles/s • ${villageWoodPerSecond(houseIndex).toFixed(1)} wood/s`;
+    villageNode.querySelector(".village-block-title").textContent = `Village ${houseIndex + 1} • ${formatBig(toBig(villageBps(houseIndex)), 1)} bubbles/s • ${formatBig(toBig(villageWoodPerSecond(houseIndex)), 1)} wood/s`;
     const collectBtn = villageNode.querySelector(".collect-wood-btn");
     collectBtn.textContent = collectButtonLabel(houseIndex);
     collectBtn.disabled = collectCooldownRemainingMs(houseIndex) > 0;
